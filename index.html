@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Canlandır — Görselden Çizgi Film ve Animasyon Yapma Programı</title>
+<meta name="description" content="Çizimlerinizi, fotoğraflarınızı ve çıkartmalarınızı tarayıcıda hareketlendirin: tek tıkla zıplatın, yürütün, uçurun; GIF, MP4 ya da WebM olarak indirin. Ücretsiz, kurulumsuz, dosyalar bilgisayarınızdan çıkmaz.">
+<meta name="theme-color" content="#0b0f17">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Canlandır — Görselden Çizgi Film Yapma Programı">
+<meta property="og:description" content="Görsel yükle, hareket seç, GIF ya da video olarak indir. Tarayıcıda çalışan ücretsiz animasyon stüdyosu.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div id="app" class="app" data-panel="stage">
+  <header class="topbar">
+    <span class="brand" aria-hidden="true">🎬</span>
+    <div class="brand-name">Canlandır <span>çizgi film stüdyosu</span></div>
+    <input id="projectName" class="project-name" aria-label="Film adı" maxlength="80" spellcheck="false">
+    <div class="topbar-actions">
+      <button id="btnNew" class="tb" type="button" title="Yeni film">Yeni</button>
+      <button id="btnOpen" class="tb" type="button" title="Proje dosyası aç (Ctrl+O)">Aç</button>
+      <button id="btnSave" class="tb" type="button" title="Projeyi dosya olarak kaydet (Ctrl+S)">Kaydet</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button id="btnUndo" class="tb icon" type="button" title="Geri al (Ctrl+Z)" aria-label="Geri al">↶</button>
+      <button id="btnRedo" class="tb icon" type="button" title="İleri al (Ctrl+Y)" aria-label="İleri al">↷</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button id="btnHelp" class="tb icon" type="button" title="Yardım ve kısayollar" aria-label="Yardım">?</button>
+      <button id="btnExport" class="tb primary" type="button" title="GIF / MP4 / WebM / PNG (Ctrl+E)">Dışa aktar</button>
+    </div>
+  </header>
+
+  <nav class="mobile-tabs" aria-label="Paneller">
+    <button type="button" data-panel="layers">Katmanlar</button>
+    <button type="button" data-panel="stage" class="active">Sahne</button>
+    <button type="button" data-panel="props">Özellikler</button>
+    <button type="button" data-panel="timeline">Zaman</button>
+  </nav>
+
+  <aside class="panel panel-left" id="panelLeft">
+    <section class="box">
+      <h2>Ekle</h2>
+      <div class="add-grid">
+        <button id="btnAddImages" class="add" type="button" title="PNG, JPG, WebP, GIF, SVG. Sahneye sürükleyip bırakmak ya da yapıştırmak da olur."><span class="ico">🖼️</span>Görsel ekle</button>
+        <button id="btnAddSequence" class="add" type="button" title="Birden çok çizimi tek bir kare dizisi (yürüme döngüsü gibi) olarak ekler"><span class="ico">🎞️</span>Kare dizisi</button>
+        <button id="btnAddText" class="add" type="button" title="Yazı ya da konuşma balonu"><span class="ico">💬</span>Metin / balon</button>
+        <button id="btnDemo" class="add ghost" type="button" title="Hazır bir mini film açar"><span class="ico">✨</span>Örnek film</button>
+      </div>
+    </section>
+    <section class="box grow">
+      <h2>Katmanlar <span id="layerCount" class="count"></span></h2>
+      <ul id="layerList" class="layer-list" aria-label="Katman listesi"></ul>
+      <div class="layer-tools">
+        <button id="btnLayerUp" type="button" title="Bir üste taşı">▲</button>
+        <button id="btnLayerDown" type="button" title="Bir alta taşı">▼</button>
+        <button id="btnLayerDup" type="button" title="Çoğalt (Ctrl+D)">⧉</button>
+        <button id="btnLayerDel" type="button" title="Sil (Delete)" class="danger">🗑</button>
+      </div>
+    </section>
+    <section class="box collapsible" id="filmBox">
+      <h2 class="toggle-head" id="filmHead">Film ayarları <span class="chev">▼</span></h2>
+      <div class="box-body">
+        <label class="field">Boyut <select id="stageSize"></select></label>
+        <div class="grid3">
+          <label class="field">Genişlik <input id="stageW" type="number" min="16" max="4096" step="2"></label>
+          <label class="field">Yükseklik <input id="stageH" type="number" min="16" max="4096" step="2"></label>
+          <label class="field">Kare hızı <select id="projectFps"><option value="8">8 fps</option><option value="12">12 fps</option><option value="15">15 fps</option><option value="24">24 fps</option><option value="25">25 fps</option><option value="30">30 fps</option></select></label>
+        </div>
+        <div class="audio-row">
+          <span id="audioName" class="muted">Ses yok</span>
+          <button id="btnAudio" class="small" type="button">Ses ekle</button>
+          <button id="btnAudioRemove" class="small danger" type="button" hidden>Kaldır</button>
+        </div>
+        <label class="field" id="audioVolRow" hidden>Ses düzeyi <input id="audioVol" type="range" min="0" max="1" step="0.05"></label>
+      </div>
+    </section>
+  </aside>
+
+  <main class="stage-area" id="stageArea">
+    <div class="stage-toolbar">
+      <div class="stage-tools">
+        <button id="btnZoomOut" type="button" title="Uzaklaştır">−</button>
+        <span id="zoomLabel" class="zoom-label">100%</span>
+        <button id="btnZoomIn" type="button" title="Yakınlaştır">+</button>
+        <button id="btnZoomFit" type="button" title="Pencereye sığdır">Sığdır</button>
+      </div>
+      <div class="stage-tools">
+        <button id="btnOnion" class="toggle" type="button" title="Soğan zarı: önceki ve sonraki kareyi silik göster">Soğan zarı</button>
+        <button id="btnGrid" class="toggle" type="button" title="Üçte bir ızgarası">Izgara</button>
+        <button id="btnFramePng" type="button" title="Bu kareyi PNG olarak indir">📷 Kare</button>
+      </div>
+    </div>
+    <div class="stage-viewport" id="viewport">
+      <div class="stage-wrap" id="stageWrap">
+        <canvas id="stage" aria-label="Sahne"></canvas>
+        <canvas id="overlay"></canvas>
+      </div>
+      <div class="empty-state" id="emptyState" hidden>
+        <div class="empty-card">
+          <p class="eyebrow">GÖRSELDEN ÇİZGİ FİLM</p>
+          <h1>Görsellerini hareketlendir.</h1>
+          <p>Bir çizim, fotoğraf ya da çıkartma yükle; tek tıkla zıplasın, yürüsün, uçsun. Sonra GIF ya da video olarak indir.</p>
+          <div class="empty-actions">
+            <button id="emptyAdd" class="primary big" type="button">Görsel yükle</button>
+            <button id="emptyDemo" class="big ghost" type="button">Örnek filmi aç</button>
+          </div>
+          <ol class="steps"><li>Görsel ekle</li><li>Hareket seç</li><li>Dışa aktar</li></ol>
+        </div>
+      </div>
+      <div class="drop-hint" id="dropHint" hidden>Bırakın: görseller sahneye eklenecek</div>
+    </div>
+  </main>
+
+  <aside class="panel panel-right" id="panelRight">
+    <div id="props" class="props"></div>
+  </aside>
+
+  <section class="timeline" id="timeline" aria-label="Zaman çizelgesi">
+    <div class="tl-resize" id="tlResize" title="Yüksekliği sürükleyerek ayarla"></div>
+    <div class="tl-header">
+      <div class="transport">
+        <button id="btnStart" type="button" title="Başa (Home)">⏮</button>
+        <button id="btnPrev" type="button" title="Önceki kare (←)">◂</button>
+        <button id="btnPlay" class="play" type="button" title="Oynat / Durdur (Boşluk)">▶</button>
+        <button id="btnNext" type="button" title="Sonraki kare (→)">▸</button>
+        <button id="btnEnd" type="button" title="Sona (End)">⏭</button>
+        <span class="time" id="timeLabel">0.00 sn</span>
+        <button id="btnLoop" class="toggle active" type="button" title="Döngü">🔁</button>
+        <button id="btnPlayAll" class="toggle" type="button" title="Tüm sahneleri peş peşe oynat">Tüm film</button>
+      </div>
+      <div class="scene-tabs" id="sceneTabs" role="tablist" aria-label="Sahneler"></div>
+      <div class="tl-settings">
+        <label>Sahne süresi <input id="sceneDuration" type="number" min="0.5" max="600" step="0.5"> sn</label>
+        <label title="Zaman çizelgesi yakınlaştırma">🔍 <input id="tlZoom" type="range" min="24" max="400" value="90"></label>
+      </div>
+    </div>
+    <div class="tl-body" id="tlBody">
+      <div class="tl-row tl-ruler-row">
+        <div class="tl-name head">Katman</div>
+        <div class="tl-track-area" id="rulerArea"><canvas id="ruler" height="26"></canvas></div>
+      </div>
+      <div id="tlRows"></div>
+      <div class="playhead" id="playhead"><div class="ph-handle"></div></div>
+    </div>
+  </section>
+</div>
+
+<dialog id="exportDialog" class="dlg">
+  <form method="dialog" class="dlg-card" id="exportForm">
+    <header><h2>Dışa aktar</h2><button value="cancel" class="x" type="submit" aria-label="Kapat">×</button></header>
+    <div class="fmt-grid" id="fmtGrid">
+      <label class="fmt"><input type="radio" name="fmt" value="gif" checked><span class="fmt-ico">GIF</span><b>GIF</b><small>Her yerde oynar, sessiz</small></label>
+      <label class="fmt" id="fmtMp4"><input type="radio" name="fmt" value="mp4"><span class="fmt-ico">MP4</span><b>MP4 video</b><small>WhatsApp, Instagram, YouTube</small></label>
+      <label class="fmt"><input type="radio" name="fmt" value="webm"><span class="fmt-ico">WebM</span><b>WebM video</b><small>Küçük dosya, sesli</small></label>
+      <label class="fmt"><input type="radio" name="fmt" value="png"><span class="fmt-ico">PNG</span><b>PNG kare dizisi</b><small>ZIP içinde, saydam destekli</small></label>
+    </div>
+    <div class="opt-rows">
+      <label class="field">Kapsam <select id="exRange"></select></label>
+      <label class="field">Boyut <select id="exScale"></select></label>
+      <label class="field" id="exFpsRow">GIF kare hızı <select id="exFps"><option value="10">10 fps (küçük dosya)</option><option value="12">12 fps</option><option value="15" selected>15 fps (önerilen)</option><option value="20">20 fps</option><option value="25">25 fps (akıcı)</option></select></label>
+      <label class="field" id="exQualityRow">Kalite <select id="exQuality"><option value="low">Düşük (küçük dosya)</option><option value="mid" selected>Orta</option><option value="high">Yüksek</option></select></label>
+      <label class="check" id="exDitherRow"><input type="checkbox" id="exDither" checked> Renk geçişlerini yumuşat (fotoğraflar için)</label>
+    </div>
+    <p class="ex-note" id="exNote"></p>
+    <div class="progress" id="exProgress" hidden><div class="bar"><i></i></div><span id="exProgressText"></span></div>
+    <div class="ex-result" id="exResult" hidden></div>
+    <footer>
+      <button value="cancel" class="ghost" type="submit">Kapat</button>
+      <button id="exCancel" class="ghost" type="button" hidden>İptal</button>
+      <button id="exStart" class="primary" type="button">Oluştur ve indir</button>
+    </footer>
+  </form>
+</dialog>
+
+<dialog id="helpDialog" class="dlg">
+  <form method="dialog" class="dlg-card wide">
+    <header><h2>Nasıl kullanılır?</h2><button value="cancel" class="x" type="submit" aria-label="Kapat">×</button></header>
+    <div class="help-cols">
+      <div>
+        <h3>Üç adımda çizgi film</h3>
+        <ol class="help-steps">
+          <li><b>Görsel ekle.</b> Çizimini, fotoğrafını ya da çıkartmanı yükle. Birden çok çizimi <i>Kare dizisi</i> olarak eklersen (yürüme adımları gibi) sırayla oynar.</li>
+          <li><b>Hareket seç.</b> Katmanı tıkla, sağdaki <i>Hareket efektleri</i> bölümünden Zıpla, Yürü, Süzül, Kayarak Gir gibi efektleri ekle; gücünü ve hızını kaydırıcılarla ayarla.</li>
+          <li><b>Dışa aktar.</b> GIF, MP4 ya da WebM olarak indir. Her şey tarayıcında olur, dosyaların hiçbir sunucuya gitmez.</li>
+        </ol>
+        <h3>Anahtar kareler (ileri düzey)</h3>
+        <p>Bir katmanı farklı zamanlarda farklı yerlere koymak için zaman çizelgesinde kareyi seç, katmanı taşı ve <b>K</b> tuşuna bas (ya da ◆ düğmesi). Aradaki hareket kendiliğinden oluşur; geçiş eğrisini seçebilirsin. <i>Ani geçiş</i> eğrisi poz-poz çizgi film hissi verir.</p>
+        <h3>Sahneler</h3>
+        <p>Zaman çizelgesinin üstündeki <b>+</b> ile yeni sahne ekle. Dışa aktarırken sahneler peş peşe tek film olur; sahne ayarlarından siyaha geçiş ekleyebilirsin.</p>
+      </div>
+      <div>
+        <h3>Kısayollar</h3>
+        <table class="keys">
+          <tr><td><kbd>Boşluk</kbd></td><td>Oynat / durdur</td></tr>
+          <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Bir kare geri / ileri (<kbd>Shift</kbd>: 1 sn)</td></tr>
+          <tr><td><kbd>Home</kbd> <kbd>End</kbd></td><td>Başa / sona</td></tr>
+          <tr><td><kbd>K</kbd></td><td>Seçili katmana anahtar kare ekle</td></tr>
+          <tr><td><kbd>I</kbd> <kbd>O</kbd></td><td>Katmanın giriş / çıkış zamanını buraya al</td></tr>
+          <tr><td><kbd>Alt</kbd>+ok</td><td>Katmanı 1 px kaydır (<kbd>Shift</kbd>: 10 px)</td></tr>
+          <tr><td><kbd>Delete</kbd></td><td>Seçili anahtar kareyi ya da katmanı sil</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd></td><td>Geri al / ileri al</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Katmanı çoğalt</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd> / <kbd>O</kbd></td><td>Projeyi kaydet / aç</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>Dışa aktar</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>V</kbd></td><td>Panodaki görseli yapıştır</td></tr>
+          <tr><td><kbd>Shift</kbd>+sürükle</td><td>Tek eksende taşı, 15° adımla döndür, serbest ölçekle</td></tr>
+        </table>
+        <h3>Biçimler</h3>
+        <p><b>GIF</b> her yerde açılır ama sessizdir ve 256 renklidir. <b>MP4</b> telefon ve sosyal medya için en uygunu; Chrome, Edge ve Safari üretir. <b>WebM</b> küçük ve sesli; her tarayıcıda çalışır. <b>PNG dizisi</b> saydam arka planı korur; montaj programlarına alabilirsin.</p>
+        <p class="muted">Çalışman bu tarayıcıda otomatik saklanır. Başka bilgisayara taşımak için <b>Kaydet</b> ile proje dosyasını indir.</p>
+        <p class="muted">Canlandır, <a href="https://ganzz.digital" target="_blank" rel="noopener">Ganz Dijital</a> tarafından geliştirilen açık bir araçtır.</p>
+      </div>
+    </div>
+    <footer><button value="ok" class="primary" type="submit">Anladım</button></footer>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<audio id="audioEl" hidden></audio>
+<input type="file" id="fileImages" accept="image/*,.svg" multiple hidden>
+<input type="file" id="fileSequence" accept="image/*,.svg" multiple hidden>
+<input type="file" id="fileFrames" accept="image/*,.svg" multiple hidden>
+<input type="file" id="fileProject" accept=".json,application/json" hidden>
+<input type="file" id="fileAudio" accept="audio/*" hidden>
+<input type="file" id="fileBgImage" accept="image/*" hidden>
+
+<script src="lib/zip.js?v=1"></script>
+<script src="lib/gif-encoder.js?v=1"></script>
+<script src="lib/webm-fix.js?v=1"></script>
+<script src="lib/mp4-muxer.js?v=1"></script>
+<script src="motion.js?v=1"></script>
+<script src="model.js?v=1"></script>
+<script src="render.js?v=1"></script>
+<script src="demo.js?v=1"></script>
+<script src="exporter.js?v=1"></script>
+<script src="ui.js?v=1"></script>
+<script src="app.js?v=1"></script>
+</body>
+</html>

@@ -1,0 +1,216 @@
+/* Canlandır — proje veri modeli: varsayılanlar, doğrulama, kopyalama. */
+(function (root) {
+  "use strict";
+  var M = root.Motion;
+
+  var VERSION = 1;
+  var STAGE_PRESETS = [
+    { id: "yatay-hd", label: "Yatay 16:9 · 1280×720 (YouTube)", w: 1280, h: 720 },
+    { id: "yatay-fhd", label: "Yatay 16:9 · 1920×1080", w: 1920, h: 1080 },
+    { id: "kare", label: "Kare 1:1 · 1080×1080 (Instagram)", w: 1080, h: 1080 },
+    { id: "dikey", label: "Dikey 9:16 · 1080×1920 (Reels, TikTok)", w: 1080, h: 1920 },
+    { id: "kucuk", label: "Küçük 4:3 · 640×480 (GIF)", w: 640, h: 480 },
+    { id: "sticker", label: "Çıkartma · 512×512", w: 512, h: 512 }
+  ];
+  var FONTS = [
+    { id: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", label: "Düz (sistem)" },
+    { id: "'Comic Sans MS', 'Comic Neue', 'Chalkboard SE', cursive", label: "Çizgi roman" },
+    { id: "Impact, 'Arial Black', sans-serif", label: "Kalın afiş" },
+    { id: "Georgia, 'Times New Roman', serif", label: "Klasik (serif)" },
+    { id: "'Courier New', monospace", label: "Daktilo" },
+    { id: "'Brush Script MT', 'Segoe Script', cursive", label: "El yazısı" }
+  ];
+
+  function num(v, def, min, max) {
+    v = +v;
+    if (!Number.isFinite(v)) v = def;
+    if (min != null && v < min) v = min;
+    if (max != null && v > max) v = max;
+    return v;
+  }
+  function str(v, def, max) { return typeof v === "string" ? v.slice(0, max || 500) : def; }
+  function bool(v, def) { return typeof v === "boolean" ? v : def; }
+  function oneOf(v, list, def) { return list.indexOf(v) >= 0 ? v : def; }
+
+  function newBackground() { return { type: "gradient", color: "#5fb8ff", color2: "#eaf7ff", angle: 180, assetId: null }; }
+
+  function newScene(name, duration) {
+    return {
+      id: M.uid("sc"), name: name || "Sahne", duration: duration || 4,
+      background: newBackground(),
+      transition: { type: "none", duration: 0.5 },
+      layers: []
+    };
+  }
+
+  function newProject(opts) {
+    opts = opts || {};
+    var p = {
+      version: VERSION, name: opts.name || "Adsız Film",
+      width: opts.width || 1280, height: opts.height || 720, fps: opts.fps || 24,
+      audio: null, assets: {}, scenes: []
+    };
+    p.scenes.push(newScene("Sahne 1", opts.duration || 4));
+    return p;
+  }
+
+  function newText() {
+    return {
+      content: "Merhaba!", font: FONTS[1].id, size: 56, weight: "700", color: "#1b1f2a",
+      stroke: "#ffffff", strokeWidth: 0, align: "center",
+      bubble: true, bubbleColor: "#ffffff", bubbleTail: "left", maxWidth: 520, lineHeight: 1.25
+    };
+  }
+
+  function newLayer(type, opts) {
+    opts = opts || {};
+    var L = {
+      id: M.uid("ly"), name: opts.name || (type === "text" ? "Metin" : type === "sequence" ? "Kare dizisi" : "Görsel"),
+      type: type, visible: true, locked: false,
+      frames: opts.frames ? opts.frames.slice() : [], frameFps: opts.frameFps || 8, frameMode: opts.frameMode || "loop",
+      text: type === "text" ? Object.assign(newText(), opts.text || {}) : null,
+      base: Object.assign({ x: 0, y: 0, rot: 0, sx: 1, sy: 1, opacity: 1 }, opts.base || {}),
+      tracks: { x: [], y: [], rot: [], sx: [], sy: [], opacity: [] },
+      anchor: Object.assign({ x: 0.5, y: 0.5 }, opts.anchor || {}),
+      flipX: false, flipY: false,
+      inPoint: opts.inPoint || 0, outPoint: opts.outPoint == null ? null : opts.outPoint,
+      effects: []
+    };
+    return L;
+  }
+
+  function normalizeTrack(tr) {
+    if (!Array.isArray(tr)) return [];
+    var out = [];
+    tr.forEach(function (k) {
+      if (!k || !Number.isFinite(+k.t) || !Number.isFinite(+k.v)) return;
+      out.push({ t: Math.max(0, +k.t), v: +k.v, e: M.EASINGS[k.e] ? k.e : "easeInOutQuad" });
+    });
+    out.sort(function (a, b) { return a.t - b.t; });
+    return out;
+  }
+
+  function normalizeLayer(raw, assets) {
+    if (!raw || typeof raw !== "object") return null;
+    var type = oneOf(raw.type, ["image", "sequence", "text"], "image");
+    var L = newLayer(type, { name: str(raw.name, undefined, 80) });
+    if (typeof raw.id === "string" && raw.id.length < 64) L.id = raw.id;
+    L.visible = bool(raw.visible, true);
+    L.locked = bool(raw.locked, false);
+    L.frames = Array.isArray(raw.frames) ? raw.frames.filter(function (f) { return typeof f === "string" && assets[f]; }) : [];
+    if (type !== "text" && !L.frames.length) return null;      // görseli kayıp katman atlanır
+    L.frameFps = num(raw.frameFps, 8, 0.5, 60);
+    L.frameMode = oneOf(raw.frameMode, ["loop", "once", "pingpong"], "loop");
+    if (type === "text") {
+      var t = raw.text || {}, d = newText();
+      L.text = {
+        content: str(t.content, d.content, 2000), font: str(t.font, d.font, 200), size: num(t.size, d.size, 6, 600),
+        weight: oneOf(String(t.weight), ["400", "700"], d.weight), color: str(t.color, d.color, 32),
+        stroke: str(t.stroke, d.stroke, 32), strokeWidth: num(t.strokeWidth, 0, 0, 40),
+        align: oneOf(t.align, ["left", "center", "right"], "center"),
+        bubble: bool(t.bubble, true), bubbleColor: str(t.bubbleColor, d.bubbleColor, 32),
+        bubbleTail: oneOf(t.bubbleTail, ["none", "left", "right"], "left"),
+        maxWidth: num(t.maxWidth, d.maxWidth, 40, 4000), lineHeight: num(t.lineHeight, 1.25, 0.8, 3)
+      };
+    }
+    var b = raw.base || {};
+    L.base = { x: num(b.x, 0), y: num(b.y, 0), rot: num(b.rot, 0), sx: num(b.sx, 1, -50, 50), sy: num(b.sy, 1, -50, 50), opacity: num(b.opacity, 1, 0, 1) };
+    var tk = raw.tracks || {};
+    L.tracks = { x: normalizeTrack(tk.x), y: normalizeTrack(tk.y), rot: normalizeTrack(tk.rot), sx: normalizeTrack(tk.sx), sy: normalizeTrack(tk.sy), opacity: normalizeTrack(tk.opacity) };
+    var a = raw.anchor || {};
+    L.anchor = { x: num(a.x, 0.5, -2, 3), y: num(a.y, 0.5, -2, 3) };
+    L.flipX = bool(raw.flipX, false); L.flipY = bool(raw.flipY, false);
+    L.inPoint = num(raw.inPoint, 0, 0);
+    L.outPoint = raw.outPoint == null ? null : num(raw.outPoint, null, 0);
+    L.effects = [];
+    if (Array.isArray(raw.effects)) raw.effects.forEach(function (e) {
+      if (!e || !M.EFFECTS[e.type]) return;
+      var def = M.EFFECTS[e.type], params = {};
+      def.params.forEach(function (p) {
+        var v = e.params ? e.params[p.key] : undefined;
+        if (p.type === "range") params[p.key] = num(v, p.def, p.min, p.max);
+        else params[p.key] = p.options.some(function (o) { return o.value === v; }) ? v : p.def;
+      });
+      L.effects.push({ id: typeof e.id === "string" ? e.id : M.uid("fx"), type: e.type, params: params,
+        start: num(e.start, 0, 0), end: e.end == null ? null : num(e.end, null, 0), enabled: bool(e.enabled, true) });
+    });
+    return L;
+  }
+
+  /* Dosyadan/otomatik kayıttan gelen nesneyi güvenli bir projeye çevirir. */
+  function normalizeProject(raw) {
+    if (!raw || typeof raw !== "object" || !Array.isArray(raw.scenes)) throw new Error("Bu dosya bir Canlandır projesi değil.");
+    var p = newProject();
+    p.scenes = [];
+    p.name = str(raw.name, "Adsız Film", 120);
+    p.width = Math.round(num(raw.width, 1280, 16, 4096));
+    p.height = Math.round(num(raw.height, 720, 16, 4096));
+    p.fps = Math.round(num(raw.fps, 24, 1, 60));
+    p.assets = {};
+    if (raw.assets && typeof raw.assets === "object") {
+      Object.keys(raw.assets).forEach(function (id) {
+        var a = raw.assets[id];
+        if (!a || typeof a.dataUrl !== "string" || !/^data:image\//.test(a.dataUrl)) return;
+        p.assets[id] = { id: id, name: str(a.name, "görsel", 120), dataUrl: a.dataUrl, width: Math.round(num(a.width, 1, 1)), height: Math.round(num(a.height, 1, 1)) };
+      });
+    }
+    if (raw.audio && typeof raw.audio.dataUrl === "string" && /^data:audio\//.test(raw.audio.dataUrl)) {
+      p.audio = { name: str(raw.audio.name, "ses", 120), dataUrl: raw.audio.dataUrl, volume: num(raw.audio.volume, 1, 0, 1) };
+    }
+    raw.scenes.forEach(function (s, i) {
+      if (!s || typeof s !== "object") return;
+      var sc = newScene(str(s.name, "Sahne " + (i + 1), 60), num(s.duration, 4, 0.1, 600));
+      if (typeof s.id === "string" && s.id.length < 64) sc.id = s.id;
+      var bg = s.background || {};
+      sc.background = {
+        type: oneOf(bg.type, ["color", "gradient", "image", "transparent"], "gradient"),
+        color: str(bg.color, "#5fb8ff", 32), color2: str(bg.color2, "#eaf7ff", 32), angle: num(bg.angle, 180, 0, 360),
+        assetId: (typeof bg.assetId === "string" && p.assets[bg.assetId]) ? bg.assetId : null
+      };
+      if (sc.background.type === "image" && !sc.background.assetId) sc.background.type = "color";
+      var trn = s.transition || {};
+      sc.transition = { type: oneOf(trn.type, ["none", "fade"], "none"), duration: num(trn.duration, 0.5, 0.1, 5) };
+      if (Array.isArray(s.layers)) s.layers.forEach(function (l) { var L = normalizeLayer(l, p.assets); if (L) sc.layers.push(L); });
+      p.scenes.push(sc);
+    });
+    if (!p.scenes.length) p.scenes.push(newScene("Sahne 1", 4));
+    return p;
+  }
+
+  function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  function cloneLayer(layer) {
+    var c = deepClone(layer);
+    c.id = M.uid("ly");
+    c.name = layer.name + " kopya";
+    c.effects.forEach(function (e) { e.id = M.uid("fx"); });
+    return c;
+  }
+  function cloneScene(scene) {
+    var c = deepClone(scene);
+    c.id = M.uid("sc");
+    c.name = scene.name + " kopya";
+    c.layers.forEach(function (l) { l.id = M.uid("ly"); l.effects.forEach(function (e) { e.id = M.uid("fx"); }); });
+    return c;
+  }
+
+  function usedAssetIds(project) {
+    var used = {};
+    project.scenes.forEach(function (s) {
+      if (s.background && s.background.assetId) used[s.background.assetId] = true;
+      s.layers.forEach(function (l) { (l.frames || []).forEach(function (f) { used[f] = true; }); });
+    });
+    return used;
+  }
+  function pruneAssets(project) {
+    var used = usedAssetIds(project);
+    Object.keys(project.assets).forEach(function (id) { if (!used[id]) delete project.assets[id]; });
+  }
+
+  root.Model = {
+    VERSION: VERSION, STAGE_PRESETS: STAGE_PRESETS, FONTS: FONTS,
+    newProject: newProject, newScene: newScene, newLayer: newLayer, newText: newText,
+    normalizeProject: normalizeProject, cloneLayer: cloneLayer, cloneScene: cloneScene, deepClone: deepClone,
+    usedAssetIds: usedAssetIds, pruneAssets: pruneAssets
+  };
+})(window);
