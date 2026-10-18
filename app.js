@@ -510,8 +510,8 @@
     list.forEach(function (f) { chain = chain.then(function () { return readImageAsset(f).then(function (a) { assets.push(a); }).catch(function () { /* atla */ }); }); });
     return chain.then(function () { assets.forEach(function (a) { S.project.assets[a.id] = a; }); return R.ensureAssets(S.project).then(function () { return assets; }); });
   }
-  function addCastImages(files) {
-    var castId = S.pendingCast; S.pendingCast = null;
+  function addCastImages(files) { var castId = S.pendingCast; S.pendingCast = null; App.addCastFiles(castId, files); }
+  App.addCastFiles = function (castId, files) {
     var c = App.ensureScript().cast.find(function (x) { return x.id === castId; });
     if (!c) return;
     readMany(files).then(function (assets) {
@@ -520,10 +520,10 @@
         var role = c.images.some(function (im) { return im.role === "pose"; }) ? guessRole(a.name) : "pose";
         c.images.push({ assetId: a.id, role: role });
       });
-      App.commit(); UI.renderScriptDialog();
+      App.commit(); UI.renderScriptDialog(); if (root.Easy) root.Easy.refreshCast();
       App.toast(assets.length + " görsel “" + c.name + "” karakterine eklendi", "ok");
     });
-  }
+  };
   /* Dosya adından rol tahmini: ali-konusma.png, ayse_yuru2.png, mutlu.png … */
   function guessRole(name) {
     var n = root.Director.norm(name);
@@ -541,7 +541,7 @@
       if (!assets.length) { App.toast("Görsel okunamadı", "error"); return; }
       var sc = App.ensureScript();
       assets.forEach(function (a) { sc.backgrounds.push({ id: M.uid("bg"), assetId: a.id, name: baseName(a.name).replace(/[-_]+/g, " ") }); });
-      App.commit(); UI.renderScriptDialog();
+      App.commit(); UI.renderScriptDialog(); if (root.Easy) root.Easy.refreshCast();
       App.toast(assets.length + " arka plan eklendi", "ok");
     });
   }
@@ -557,7 +557,8 @@
     if (added) App.commit();
     return added;
   };
-  App.buildFromScript = function () {
+  App.buildFromScript = function (opts) {
+    opts = opts || {};
     var sc = App.ensureScript();
     if (!sc.text.trim()) return Promise.reject(new Error("Önce senaryoyu yaz (ya da “Örnek senaryo”yu aç)."));
     if (S.playing) App.pause();
@@ -575,7 +576,7 @@
         App.commit(); layoutStage(); UI.renderAll(); S.dirty = true;
         UI.showBuildWarnings(res.warnings);
         S.playAll = true; S.loop = false; UI.updateToggles();
-        setTimeout(function () { App.play(); }, 150);
+        if (opts.autoplay !== false) setTimeout(function () { App.play(); }, 150);
         return res;
       });
     });
@@ -851,12 +852,13 @@
   /* ── Sürükle-bırak ve yapıştır ───────────────────────────── */
   function bindDropPaste() {
     var hint = $("dropHint"), depth = 0;
-    document.addEventListener("dragenter", function (ev) { if (hasFiles(ev)) { depth++; hint.hidden = false; viewport.classList.add("dragover"); } });
+    document.addEventListener("dragenter", function (ev) { if (hasFiles(ev) && !(root.Easy && root.Easy.isOpen())) { depth++; hint.hidden = false; viewport.classList.add("dragover"); } });
     document.addEventListener("dragleave", function () { if (depth > 0) depth--; if (depth === 0) { hint.hidden = true; viewport.classList.remove("dragover"); } });
     document.addEventListener("dragover", function (ev) { if (hasFiles(ev)) { ev.preventDefault(); ev.dataTransfer.dropEffect = "copy"; } });
     document.addEventListener("drop", function (ev) {
       if (!hasFiles(ev)) return;
       ev.preventDefault(); depth = 0; hint.hidden = true; viewport.classList.remove("dragover");
+      if (root.Easy && root.Easy.isOpen()) return;   // sihirbazda yalnızca kartların kendi alanları kabul eder
       var opts = {};
       var r = overlay.getBoundingClientRect();
       if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) opts.position = { x: (ev.clientX - r.left) / S.view.scale, y: (ev.clientY - r.top) / S.view.scale };
@@ -884,6 +886,7 @@
       var typing = isTyping(ev.target), ctrl = ev.ctrlKey || ev.metaKey, L = App.selLayer();
       if (ev.key === "Escape") { if (typing) { ev.target.blur(); return; } App.selectLayer(null); return; }
       if (typing) return;
+      if (root.Easy && root.Easy.isOpen()) return;   // sihirbaz açıkken stüdyo kısayolları çalışmaz
       var tag = ev.target && ev.target.tagName;
       // Kaydırıcı/onay kutusu odaktayken ok ve Boşluk tuşları o öğeye ait kalsın
       if (tag === "INPUT" && (ev.key.indexOf("Arrow") === 0 || ev.key === " ")) return;
@@ -954,12 +957,15 @@
 
   /* ── Başlat ──────────────────────────────────────────────── */
   function init() {
-    bindTopbar(); bindStage(); bindKeyboard(); bindDropPaste(); UI.init();
+    bindTopbar(); bindStage(); bindKeyboard(); bindDropPaste(); UI.init(); if (root.Easy) root.Easy.init();
     var loaded = idbGet("autosave").then(function (saved) { return saved ? Model.normalizeProject(saved) : null; }).catch(function () { return null; });
     loaded.then(function (p) {
       var restored = !!p;
       return loadProject(p || Model.newProject()).then(function () {
         if (restored && hasContent(S.project)) App.toast("Önceki çalışmanız geri yüklendi", "ok");
+        var mode = null;
+        try { mode = localStorage.getItem("canlandir.mode"); } catch (e) { /* yoksay */ }
+        if (mode !== "studio" && root.Easy) root.Easy.openWizard();
       });
     }).catch(function (err) {
       console.error(err);

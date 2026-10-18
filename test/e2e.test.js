@@ -21,6 +21,7 @@ async function png(page, name, w, h, drawSrc) {
   const BASE = "http://localhost:" + server.address().port + "/";
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ acceptDownloads: true, viewport: { width: 1440, height: 900 }, locale: "tr-TR" });
+  await ctx.addInitScript(() => { try { if (!localStorage.getItem("canlandir.mode")) localStorage.setItem("canlandir.mode", "studio"); } catch (e) { /* yoksay */ } });
   const page = await ctx.newPage();
   const errors = [];
   page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") errors.push(m.type() + ": " + m.text()); });
@@ -225,7 +226,35 @@ async function png(page, name, w, h, drawSrc) {
     const gifSize = await page.evaluate(async () => { const b = await Exporter.exportGif(App.S.project, { fps: 8, scale: 0.25, range: 1 }, null, { cancelled: false }); return b.size; });
     check(gifSize > 5000, "üretilen sahne GIF olarak kodlandı (" + gifSize + " bayt)");
 
-    console.log("19) Dar ekran düzeni");
+    console.log("19) Kolay mod (sihirbaz)");
+    await page.click("#btnEasy");
+    await page.waitForTimeout(300);
+    check(await page.isVisible("#wizard") && (await page.evaluate(() => Easy.step)) === 3, "kolay mod açıldı; film olduğu için 3. adım (izle/indir)");
+    await page.evaluate(() => Easy.goto(1));
+    const cardsBefore = await page.$$eval("#wzCast .wz-card:not(.add)", (els) => els.length);
+    await page.click("#wzCast .wz-card.add");
+    await page.waitForTimeout(350);
+    check((await page.$$eval("#wzCast .wz-card:not(.add)", (els) => els.length)) === cardsBefore + 1, "karakter kartı eklendi (resim seçici açıldı)");
+    await page.evaluate(() => Easy.goto(2));
+    await page.click('#wizard [data-ins="scene"]');
+    await page.click("#wzLineBtn");
+    await page.click("#wzLineMenu button:has-text(\"konuşsun\")");
+    await page.keyboard.type("Selam!");
+    const txt = await page.evaluate(() => document.getElementById("wzText").value);
+    check(/SAHNE \d+ - MEKÂN - GÜNDÜZ\n[^\n]+: Selam!$/.test(txt.slice(-60)), "düğmeler sahne ve replik satırı ekledi");
+    await page.click("#wzSample");
+    await page.click("#wzBuild");
+    await page.waitForFunction(() => Easy.step === 3, null, { timeout: 30000 });
+    await page.waitForTimeout(600);
+    check((await page.evaluate(() => document.getElementById("wzCanvas").width)) > 100 && /sahne/.test(await page.textContent("#wzFilmInfo")), "3. adımda önizleme tuvali ve özet var");
+    const [dlEasy] = await Promise.all([page.waitForEvent("download", { timeout: 180000 }), page.click('#wizard [data-fmt="gif"]')]);
+    await dlEasy.saveAs(path.join(OUT, "kolay.gif"));
+    check(fs.statSync(path.join(OUT, "kolay.gif")).size > 5000, "kolay moddan tek tıkla GIF indirildi");
+    await page.screenshot({ path: path.join(OUT, "07-kolay-mod.png") });
+    await page.click("#wzStudio");
+    check(!(await page.isVisible("#wizard")), "gelişmiş stüdyoya dönüldü");
+
+    console.log("20) Dar ekran düzeni");
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(OUT, "05-mobil.png") });

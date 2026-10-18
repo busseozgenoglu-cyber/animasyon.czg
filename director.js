@@ -61,6 +61,7 @@
         var h3 = splitHeading(line); newScene(h3.place, h3.time, line); return;
       }
       if (!scene) newScene("", "", "");
+      if (/^[^:()]{1,40}?\s*(?:\([^)]{0,80}\))?\s*:\s*$/.test(line)) return;   // henüz yazılmamış replik ("ALİ: ") atlanır
       if ((m = line.match(/^([^:()]{1,40}?)\s*(?:\(([^)]{1,80})\))?\s*:\s*(.+)$/))) {
         var who = m[1].trim(), whoN = norm(who);
         if (!/^\d+$/.test(who) && who.split(/\s+/).length <= 4 && !/^(http|https|saat|not)$/i.test(who) && /[a-zçğıöşü]/i.test(who)) {

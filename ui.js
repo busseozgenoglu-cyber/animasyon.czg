@@ -778,7 +778,7 @@
   function bindScriptDialog() {
     var App = root.App;
     $("btnScript").addEventListener("click", UI.openScript);
-    $("emptyScript").addEventListener("click", UI.openScript);
+    $("emptyScript").addEventListener("click", function () { if (root.Easy) root.Easy.openWizard(); else UI.openScript(); });
     $("scText").addEventListener("input", function () {
       App.ensureScript().text = $("scText").value;
       clearTimeout(previewTimer); previewTimer = setTimeout(UI.renderScriptPreview, 250);

@@ -23,7 +23,8 @@
       <button id="btnOpen" class="tb" type="button" title="Proje dosyası aç (Ctrl+O)">Aç</button>
       <button id="btnSave" class="tb" type="button" title="Projeyi dosya olarak kaydet (Ctrl+S)">Kaydet</button>
       <span class="sep" aria-hidden="true"></span>
-      <button id="btnScript" class="tb script" type="button" title="Senaryo yaz, karakter görsellerini yükle; filmi program kursun">🎬 Senaryo</button>
+      <button id="btnEasy" class="tb script" type="button" title="Üç adımda film: karakterler → senaryo → indir">✨ Kolay mod</button>
+      <button id="btnScript" class="tb" type="button" title="Senaryo penceresi (gelişmiş)">🎬 Senaryo</button>
       <span class="sep" aria-hidden="true"></span>
       <button id="btnUndo" class="tb icon" type="button" title="Geri al (Ctrl+Z)" aria-label="Geri al">↶</button>
       <button id="btnRedo" class="tb icon" type="button" title="İleri al (Ctrl+Y)" aria-label="İleri al">↷</button>
@@ -176,6 +177,73 @@
   </form>
 </dialog>
 
+<div id="wizard" class="wizard" hidden>
+  <div class="wz-top">
+    <div class="wz-brand">🎬 <b>Canlandır</b><span>senaryodan çizgi film</span></div>
+    <ol class="wz-steps" id="wzSteps">
+      <li data-step="1" class="active"><i>1</i><span>Karakterler</span></li>
+      <li data-step="2"><i>2</i><span>Senaryo</span></li>
+      <li data-step="3"><i>3</i><span>Film</span></li>
+    </ol>
+    <button id="wzStudio" class="tb" type="button" title="Katmanlar, zaman çizelgesi ve efektlerle ince ayar">Gelişmiş stüdyo ›</button>
+  </div>
+  <div class="wz-body">
+    <section class="wz-step" data-step="1">
+      <h1>Filmde kimler var?</h1>
+      <p class="wz-lead">Her karaktere bir ad ve bir resim ver. Çizim, fotoğraf ya da çıkartma olabilir; arka planı saydam PNG en iyisidir. Resim eklemezsen o karakter için renkli bir yer tutucu çizeriz.</p>
+      <div id="wzCast" class="wz-cards"></div>
+      <details class="wz-details">
+        <summary>Arka plan resimleri (isteğe bağlı)</summary>
+        <p class="hint">Mekân adıyla kaydet: “park.png”, “ev.png”. Senaryoda “SAHNE 1 - PARK” yazınca kendiliğinden eşleşir. Yüklemezsen mekâna ve saate göre biz çizeriz.</p>
+        <div id="wzBgs" class="sc-bgs"></div>
+        <button type="button" id="wzAddBg" class="wz-btn ghost">+ Arka plan resmi</button>
+      </details>
+      <div class="wz-nav"><span></span><button type="button" class="wz-btn primary big" data-go="2">Senaryoya geç →</button></div>
+    </section>
+
+    <section class="wz-step" data-step="2" hidden>
+      <h1>Ne olacak? Senaryoyu yaz.</h1>
+      <p class="wz-lead">Düz Türkçe yaz; her satır bir şey anlatır: sahne başlığı, replik ya da eylem. Düğmeler senin yerine doğru biçimde satır ekler.</p>
+      <div class="wz-tools">
+        <button type="button" class="wz-chip" data-ins="scene">🎞️ Yeni sahne</button>
+        <div class="wz-dd"><button type="button" class="wz-chip" id="wzLineBtn">💬 Replik ▾</button><div class="wz-menu" id="wzLineMenu" hidden></div></div>
+        <div class="wz-dd"><button type="button" class="wz-chip" id="wzActBtn">🏃 Eylem ▾</button><div class="wz-menu wide" id="wzActMenu" hidden></div></div>
+        <button type="button" class="wz-chip" data-ins="narr">📜 Anlatıcı</button>
+        <span class="wz-spacer"></span>
+        <button type="button" class="wz-chip ghost" id="wzSample">Örnek senaryoyu yükle</button>
+      </div>
+      <textarea id="wzText" spellcheck="false" placeholder="SAHNE 1 - PARK - GÜNDÜZ&#10;Ali soldan girer.&#10;ALİ: Merhaba! Bugün hava çok güzel.&#10;AYŞE (mutlu): Hadi oyun oynayalım!&#10;Ali zıplar."></textarea>
+      <div id="wzSummary" class="wz-summary"></div>
+      <details class="wz-details"><summary>Yazım rehberi</summary><pre id="wzHelp"></pre></details>
+      <div class="wz-nav"><button type="button" class="wz-btn ghost" data-go="1">← Karakterler</button><button type="button" class="wz-btn primary big" id="wzBuild">🎬 Filmi üret</button></div>
+    </section>
+
+    <section class="wz-step" data-step="3" hidden>
+      <h1 id="wzFilmTitle">Filmin hazır!</h1>
+      <p class="wz-lead" id="wzFilmInfo"></p>
+      <div class="wz-player">
+        <canvas id="wzCanvas" title="Oynat / durdur"></canvas>
+        <div class="wz-controls">
+          <button type="button" id="wzPlay" class="wz-btn">▶ Oynat</button>
+          <input type="range" id="wzSeek" min="0" max="1000" value="0" aria-label="Zaman">
+          <span id="wzTime" class="wz-time"></span>
+        </div>
+      </div>
+      <div id="wzNotes" class="wz-notes"></div>
+      <h2>İndir</h2>
+      <div class="wz-downloads">
+        <button type="button" class="wz-btn primary big" data-fmt="mp4" id="wzDlMp4">⬇ MP4 video</button>
+        <button type="button" class="wz-btn big" data-fmt="gif">⬇ GIF</button>
+        <button type="button" class="wz-btn big" data-fmt="webm">⬇ WebM video</button>
+        <button type="button" class="wz-btn big ghost" id="wzSaveProj">Projeyi kaydet (.json)</button>
+      </div>
+      <div id="wzProgress" class="progress" hidden><div class="bar"><i></i></div><span></span></div>
+      <div id="wzResult" class="wz-result"></div>
+      <div class="wz-nav"><button type="button" class="wz-btn ghost" data-go="2">← Senaryoyu düzenle</button><button type="button" class="wz-btn ghost" id="wzOpenStudio">İnce ayar: gelişmiş stüdyoda aç ›</button></div>
+    </section>
+  </div>
+</div>
+
 <dialog id="scriptDialog" class="dlg">
   <form method="dialog" class="dlg-card xwide" id="scriptForm">
     <header>
@@ -288,6 +356,7 @@
 <script src="demo.js?v=1"></script>
 <script src="exporter.js?v=1"></script>
 <script src="director.js?v=1"></script>
+<script src="easy.js?v=1"></script>
 <script src="ui.js?v=1"></script>
 <script src="app.js?v=1"></script>
 </body>

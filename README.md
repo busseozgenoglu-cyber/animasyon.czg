@@ -18,6 +18,17 @@ otomatik kayıt `http://` üzerinden çalışır. (Dosyadan açılırsa GIF ana 
 **GitHub Pages ile yayınlamak için:** Settings → Pages → Source: *Deploy from a branch* → `main` / `/ (root)`.
 Derleme adımı yoktur; `.nojekyll` dosyası hazırdır.
 
+## Kolay mod (varsayılan)
+
+Sayfa ilk açıldığında üç adımlı sihirbaz gelir; başka bir şey bilmek gerekmez:
+
+1. **Karakterler** — kart aç, ad yaz, resmi tıkla ya da sürükle. İsteğe bağlı ek resimler (ağzı açık kare, adım kareleri, duygular).
+2. **Senaryo** — düğmelerle satır ekle: *Yeni sahne*, *Replik ▾* (kim konuşsun), *Eylem ▾* (kim, ne yapsın: girer, zıplar, el sallar…), *Anlatıcı*.
+   Yazdıkça sahne/replik sayısı ve tahmini süre görünür. “Örnek senaryoyu yükle” ile hemen deneyebilirsin.
+3. **Film** — otomatik üretilen filmi izle, tek tıkla **MP4 / GIF / WebM** indir, istersen projeyi kaydet.
+
+“Gelişmiş stüdyo ›” katman, zaman çizelgesi ve efekt düzeyinde ince ayar içindir; oradan **✨ Kolay mod** ile geri dönülür. Tercih hatırlanır.
+
 ## Senaryodan otomatik film
 
 Üstteki **🎬 Senaryo** düğmesi (Ctrl+G): senaryoyu yaz, karakterlerin görsellerini yükle, **Filmi üret** de.
@@ -86,6 +97,7 @@ Ali ve Ayşe sağa çıkar.
 | `model.js` | Proje veri modeli, varsayılanlar, dosya doğrulama |
 | `render.js` | Sahne çizimi, metin/balon, isabet testi, küçük resimler |
 | `exporter.js` | GIF / video / PNG-ZIP / proje dosyası üretimi, sahneleri birleştiren zaman çizgisi |
+| `easy.js` | Kolay mod: üç adımlı sihirbaz (karakter kartları, satır ekleme düğmeleri, önizleme, tek tıkla indirme) |
 | `director.js` | Senaryo ayrıştırıcı, eylem/duygu çözümleme, otomatik sahneleme, prosedürel arka plan ve yer tutucu karakterler |
 | `demo.js` | Tuvalde çizilen örnek film |
 | `lib/gif-encoder.js`, `lib/gif-worker.js` | Bağımlılıksız GIF89a kodlayıcı (medyan kesme, Floyd–Steinberg, LZW) |
