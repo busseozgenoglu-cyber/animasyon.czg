@@ -529,7 +529,7 @@
         fx(L, "breathe", L.inPoint || 0, null, { strength: 2, speed: 0.35 });
         return L;
       }
-      function curX(kn, t) { var c = chars[kn]; return M.trackValue(c.layer.tracks.x, t, c.layer.base.x); }
+      function curX(kn, t) { var c = chars[kn]; if (!c.layer) return c.x; return M.trackValue(c.layer.tracks.x, t, c.layer.base.x); }
       function charW(kn) { var c = chars[kn], a = project.assets[c.def.pose]; return (a ? a.width : 240) * Math.abs(c.scale || 1); }
       function besideDist(kn, other, factor) { return (charW(kn) + charW(other)) / 2 * (factor || 1.05); }
       function moveTo(kn, nx, t0, dur, mode) {
@@ -654,6 +654,15 @@
           warnings.push("Satır " + it.line + ": “" + it.text + "” kimin yaptığı anlaşılamadı." + (cand ? " “" + cand + "” bir karakterse 1. adımda ekle." : ""));
           t = start + dur; return;
         }
+        var group = null;
+        if (a.act === "exit" && subs.length > 1) {
+          var gdir = a.dir || (subs.reduce(function (sum, q) { return sum + curX(q, start); }, 0) / subs.length < W / 2 ? "left" : "right");
+          if (gdir === "left" || gdir === "right") {
+            var common = 0;
+            subs.forEach(function (q) { common = Math.max(common, charW(q) / 2 + (gdir === "left" ? curX(q, start) : W - curX(q, start)) + 24); });
+            group = { dir: gdir, dist: common };
+          }
+        }
         subs.forEach(function (kn) {
           var c = chars[kn], L;
           switch (a.act) {
@@ -671,14 +680,12 @@
               L = ensurePresent(kn, start);
               if (a.act === "hide") { fx(L, "fadeOut", start, start + dur); }
               else {
-                var dir2 = a.dir || (subs.length > 1 ? (subs.reduce(function (sum, q) { return sum + curX(q, start); }, 0) / subs.length < W / 2 ? "left" : "right") : (curX(kn, start) < W / 2 ? "left" : "right"));
-                if (subs.length > 1 && (dir2 === "left" || dir2 === "right")) {
+                var dir2 = group ? group.dir : (a.dir || (curX(kn, start) < W / 2 ? "left" : "right"));
+                if (group) {
                   // Birlikte çıkanlar aynı hızda yürür: ortak mesafe, kimse kimseyi yakalamaz
-                  var common = 0;
-                  subs.forEach(function (q) { common = Math.max(common, Math.abs(charW(q)) / 2 + (dir2 === "left" ? curX(q, start) : W - curX(q, start)) + 24); });
                   var x0 = curX(kn, start);
                   key(L, "x", start, x0, a.speed === "fast" ? "easeInQuad" : "linear");
-                  key(L, "x", start + dur, x0 + (dir2 === "left" ? -common : common), "linear");
+                  key(L, "x", start + dur, x0 + (group.dir === "left" ? -group.dist : group.dist), "linear");
                 } else fx(L, "slideOut", start, start + dur, { dir: dir2, easing: a.speed === "fast" ? "easeInQuad" : "easeInCubic" });
                 walkCycle(kn, start, start + dur, a.speed === "fast" ? 3.2 : 2.2);
                 if (dir2 === "left" || dir2 === "right") setFacing(kn, dir2 === "left" ? -1 : 1, start);
