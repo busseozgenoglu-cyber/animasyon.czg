@@ -27,7 +27,11 @@ Sayfa ilk açıldığında üç adımlı sihirbaz gelir; başka bir şey bilmek 
    Yazdıkça sahne/replik sayısı ve tahmini süre görünür. “Örnek senaryoyu yükle” ile hemen deneyebilirsin.
 3. **Film** — otomatik üretilen filmi izle, tek tıkla **MP4 / GIF / WebM** indir, istersen projeyi kaydet.
 
+2. adımda **film biçimi** (yatay / kare / dikey) ve isteğe bağlı ince ayarlar (karakter boyu, konuşma hızı, balon rengi, kartlar);
+3. adımda **müzik / ses** ekleme (videolara karışır), tam ekran önizleme, dışa aktarmayı iptal.
+
 “Gelişmiş stüdyo ›” katman, zaman çizelgesi ve efekt düzeyinde ince ayar içindir; oradan **✨ Kolay mod** ile geri dönülür. Tercih hatırlanır.
+Uygulama bir kez açıldıktan sonra çevrimdışı da çalışır (service worker) ve telefona "ana ekrana ekle" ile kurulabilir.
 
 ## Senaryodan otomatik film
 
@@ -55,10 +59,13 @@ Ali ve Ayşe sağa çıkar.
 - **Replik:** `ALİ: metin` — balon karakterin başının üstünde çıkar, konuşurken karakter kıpırdar (konuşma karesi yüklediysen ağzı oynar).
   Parantez içi duygu: `(mutlu)`, `(üzgün)`, `(kızgın)`, `(şaşkın)`, `(korkmuş)`, `(fısıldayarak)`, `(düşünceli)`, `(yorgun)`.
 - **Eylem:** düz cümle — girer, çıkar, yürür, koşar, zıplar, döner, düşer, kalkar, uçar, iner, el sallar, güler, ağlar, kızar, şaşırır,
-  korkar, dans eder, oturur, uyur, düşünür, bakar, büyür, küçülür, saklanır, bekler. Yön: `sağdan/soldan`, `sağa/sola`;
-  hedef: `Ali Ayşe'ye doğru yürür`; birlikte: `Ali ve Ayşe`, `Herkes`; süre: `2 saniye bekler`; hız: `koşarak`, `yavaşça`.
+  korkar, dans eder, oturur, uyur, uyanır, düşünür, bakar/görür, sarılır, alkışlar, şarkı söyler, geri çekilir, kayar, yüzer, esner,
+  atar, yakalar, yatar, büyür, küçülür, saklanır, bekler. Yön: `sağdan/soldan`, `sağa/sola`;
+  hedef: `Ali Ayşe'ye doğru yürür`, `Ali Ayşe'ye sarılır`; birlikte: `Ali ve Ayşe`, `Herkes`; süre: `2 saniye bekler`; hız: `koşarak`, `yavaşça`.
+  Ünlemle biten replikte karakter hafifçe zıplar, soru işaretinde başını yana eğer; dinleyen karakter konuşana döner ve başını sallar.
+- **Arka plan:** her sahnede kilitli bir “Arka plan” katmanı olarak gelir ve yavaşça yaklaşır/uzaklaşır (kamera hissi); bulutlar akar.
 - **Anlatıcı:** `ANLATICI: metin` → alt yazı.
-- **Karakter görselleri:** her karaktere bir duruş görseli yeter. İstersen ağzı açık kare (konuşma), adım kareleri (yürüme) ve
+- **Karakter görselleri:** her karaktere bir duruş görseli yeter; saydam PNG'lerin boş kenarları kendiliğinden kırpılır. İstersen ağzı açık kare (konuşma), adım kareleri (yürüme) ve
   duygu görselleri ekle; dosya adından rol tahmin edilir (`ali-konusma.png`, `ayse-yuru1.png`, `ali-mutlu.png`). Görseli olmayan
   karakter için isimli renkli bir yer tutucu çizilir.
 
@@ -105,6 +112,7 @@ Ali ve Ayşe sağa çıkar.
 | `lib/webm-fix.js` | MediaRecorder WebM'ine süre bilgisi ekler |
 | `lib/zip.js` | Bağımlılıksız ZIP yazıcı |
 | `serve.js` | Yerel statik sunucu (`npm start`) |
+| `sw.js`, `manifest.webmanifest` | Çevrimdışı çalışma ve ana ekrana kurulum (PWA) |
 
 Üçüncü parti bağımlılık yoktur; derleme adımı yoktur.
 

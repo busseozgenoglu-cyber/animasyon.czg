@@ -193,11 +193,11 @@
     if (file.size > 25 * 1024 * 1024) { App.toast("Ses dosyası 25 MB'tan küçük olmalı", "error"); return Promise.resolve(); }
     return readAsDataUrl(file).then(function (url) {
       S.project.audio = { name: file.name, dataUrl: url, volume: 1 };
-      setupAudio(); UI.renderFilmSettings(); scheduleAutosave();
+      setupAudio(); UI.renderFilmSettings(); scheduleAutosave(); if (root.Easy) root.Easy.refreshFilm();
       App.toast("Ses eklendi: " + file.name + " — WebM ve MP4 dışa aktarımına dahil edilir", "ok");
     });
   };
-  App.removeAudio = function () { S.project.audio = null; setupAudio(); UI.renderFilmSettings(); scheduleAutosave(); };
+  App.removeAudio = function () { S.project.audio = null; setupAudio(); UI.renderFilmSettings(); scheduleAutosave(); if (root.Easy) root.Easy.refreshFilm(); };
   App.setAudioVolume = function (v) { if (S.project.audio) { S.project.audio.volume = v; audioEl.volume = v; scheduleAutosave(); } };
 
   /* ── Görsel içe alma ─────────────────────────────────────── */
@@ -484,10 +484,25 @@
     sc.cast.push(m); App.commit(); return m;
   };
   App.renameCast = function (id, name) {
-    var c = App.ensureScript().cast.find(function (x) { return x.id === id; });
+    var sc = App.ensureScript(), c = sc.cast.find(function (x) { return x.id === id; });
     if (!c) return;
     name = String(name || "").trim().slice(0, 40);
-    if (name) c.name = name;
+    var old = c.name;
+    if (name && name !== old) {
+      c.name = name;
+      // Senaryodaki eski adı güncelle (konuşan etiketi BÜYÜK harfle, cümle içinde yazıldığı gibi; ekli hâller "Ali'ye" dokunulmaz)
+      if (sc.text && old && !/^Karakter \d+$/.test(old)) {
+        var forms = [old, old.toLocaleUpperCase("tr"), old.toLocaleLowerCase("tr")].filter(function (f, i, arr) { return arr.indexOf(f) === i; });
+        var esc = forms.map(function (f) { return f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }).join("|");
+        var re = new RegExp("(^|[^\\p{L}'])(" + esc + ")(?=[^\\p{L}']|$)", "gmu"), n = 0;
+        sc.text = sc.text.replace(re, function (m, pre, word) { n++; return pre + (word === word.toLocaleUpperCase("tr") ? name.toLocaleUpperCase("tr") : name); });
+        if (n) {
+          var ta = document.getElementById("wzText"); if (ta) ta.value = sc.text;
+          var ta2 = document.getElementById("scText"); if (ta2) ta2.value = sc.text;
+          App.toast("Senaryoda " + n + " yerde “" + old + "” → “" + name + "” güncellendi");
+        }
+      }
+    }
     App.commit(); UI.renderScriptDialog();
   };
   App.removeCastMember = function (id) {
@@ -511,10 +526,40 @@
     return chain.then(function () { assets.forEach(function (a) { S.project.assets[a.id] = a; }); return R.ensureAssets(S.project).then(function () { return assets; }); });
   }
   function addCastImages(files) { var castId = S.pendingCast; S.pendingCast = null; App.addCastFiles(castId, files); }
+  /* Karakter resimlerinin boş (saydam) kenarlarını kırpar: sahnede doğru boyda ve yerde dursun */
+  function cropTransparentAsset(a) {
+    if (!/^data:image\/png/.test(a.dataUrl)) return Promise.resolve(a);
+    return loadImage(a.dataUrl).then(function (img) {
+      var w = img.naturalWidth, hh = img.naturalHeight;
+      if (!w || !hh || w * hh > 4200 * 4200) return a;
+      var c = document.createElement("canvas"); c.width = w; c.height = hh;
+      var cx = c.getContext("2d", { willReadFrequently: true });
+      cx.drawImage(img, 0, 0);
+      var d;
+      try { d = cx.getImageData(0, 0, w, hh).data; } catch (e) { return a; }
+      var minX = w, minY = hh, maxX = -1, maxY = -1;
+      for (var y = 0; y < hh; y++) for (var x = 0; x < w; x++) {
+        if (d[(y * w + x) * 4 + 3] > 8) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+      }
+      if (maxX < 0) return a;
+      var pad = Math.round(Math.max(w, hh) * 0.02);
+      minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad); maxX = Math.min(w - 1, maxX + pad); maxY = Math.min(hh - 1, maxY + pad);
+      var cw = maxX - minX + 1, ch = maxY - minY + 1;
+      if (cw * ch > w * hh * 0.92) return a;
+      var o = document.createElement("canvas"); o.width = cw; o.height = ch;
+      o.getContext("2d").drawImage(c, minX, minY, cw, ch, 0, 0, cw, ch);
+      return { id: a.id, name: a.name, dataUrl: o.toDataURL("image/png"), width: cw, height: ch };
+    }).catch(function () { return a; });
+  }
   App.addCastFiles = function (castId, files) {
     var c = App.ensureScript().cast.find(function (x) { return x.id === castId; });
     if (!c) return;
     readMany(files).then(function (assets) {
+      return Promise.all(assets.map(cropTransparentAsset)).then(function (cropped) {
+        cropped.forEach(function (a, i) { if (a !== assets[i]) { S.project.assets[a.id] = a; R.dropAsset(a.id); } });
+        return R.ensureAssets(S.project).then(function () { return cropped; });
+      });
+    }).then(function (assets) {
       if (!assets.length) { App.toast("Görsel okunamadı", "error"); return; }
       assets.forEach(function (a) {
         var role = c.images.some(function (im) { return im.role === "pose"; }) ? guessRole(a.name) : "pose";
@@ -973,6 +1018,9 @@
     }).then(function () {
       document.body.classList.add("ready");
       requestAnimationFrame(tick);
+      if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+        navigator.serviceWorker.register("sw.js").catch(function () { /* çevrimdışı destek isteğe bağlı */ });
+      }
     });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();

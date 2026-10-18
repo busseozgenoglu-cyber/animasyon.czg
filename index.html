@@ -10,6 +10,8 @@
 <meta property="og:title" content="Canlandır — Görselden Çizgi Film Yapma Programı">
 <meta property="og:description" content="Görsel yükle, hareket seç, GIF ya da video olarak indir. Tarayıcıda çalışan ücretsiz animasyon stüdyosu.">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="favicon.svg">
 <link rel="stylesheet" href="style.css?v=1">
 </head>
 <body>
@@ -215,6 +217,22 @@
       <textarea id="wzText" spellcheck="false" placeholder="SAHNE 1 - PARK - GÜNDÜZ&#10;Ali soldan girer.&#10;ALİ: Merhaba! Bugün hava çok güzel.&#10;AYŞE (mutlu): Hadi oyun oynayalım!&#10;Ali zıplar."></textarea>
       <div id="wzSummary" class="wz-summary"></div>
       <details class="wz-details"><summary>Yazım rehberi</summary><pre id="wzHelp"></pre></details>
+      <div class="wz-format" id="wzFormat" role="group" aria-label="Film biçimi">
+        <span class="wz-label">Film biçimi</span>
+        <button type="button" data-size="1280x720">▭ Yatay · YouTube</button>
+        <button type="button" data-size="1080x1080">□ Kare · Instagram</button>
+        <button type="button" data-size="1080x1920">▯ Dikey · Reels, TikTok</button>
+      </div>
+      <details class="wz-details" id="wzSettings"><summary>İnce ayarlar (isteğe bağlı)</summary>
+        <div class="wz-settings">
+          <label class="field">Karakter boyu <span class="unit" id="wzCharHeightLabel"></span><input id="wzCharHeight" type="range" min="25" max="65" step="1"></label>
+          <label class="field">Konuşma hızı <select id="wzSpeed"><option value="slow">Yavaş (çocuklar için)</option><option value="normal">Normal</option><option value="fast">Hızlı</option></select></label>
+          <label class="field">Balon rengi <select id="wzBubble"><option value="white">Beyaz</option><option value="color">Karaktere göre renkli</option></select></label>
+          <label class="check"><input type="checkbox" id="wzTitle"> Açılışta başlık kartı</label>
+          <label class="check"><input type="checkbox" id="wzEnd"> Sonda “SON” kartı</label>
+          <label class="check"><input type="checkbox" id="wzHeadings"> Sahne adını köşede göster</label>
+        </div>
+      </details>
       <div class="wz-nav"><button type="button" class="wz-btn ghost" data-go="1">← Karakterler</button><button type="button" class="wz-btn primary big" id="wzBuild">🎬 Filmi üret</button></div>
     </section>
 
@@ -227,8 +245,10 @@
           <button type="button" id="wzPlay" class="wz-btn">▶ Oynat</button>
           <input type="range" id="wzSeek" min="0" max="1000" value="0" aria-label="Zaman">
           <span id="wzTime" class="wz-time"></span>
+          <button type="button" id="wzFull" class="wz-btn" title="Tam ekran">⛶</button>
         </div>
       </div>
+      <div id="wzMusic" class="wz-music"></div>
       <div id="wzNotes" class="wz-notes"></div>
       <h2>İndir</h2>
       <div class="wz-downloads">
@@ -237,7 +257,7 @@
         <button type="button" class="wz-btn big" data-fmt="webm">⬇ WebM video</button>
         <button type="button" class="wz-btn big ghost" id="wzSaveProj">Projeyi kaydet (.json)</button>
       </div>
-      <div id="wzProgress" class="progress" hidden><div class="bar"><i></i></div><span></span></div>
+      <div id="wzProgress" class="progress" hidden><div class="bar"><i></i></div><div class="row"><span style="flex:1"></span><button type="button" id="wzCancel" class="small">İptal</button></div></div>
       <div id="wzResult" class="wz-result"></div>
       <div class="wz-nav"><button type="button" class="wz-btn ghost" data-go="2">← Senaryoyu düzenle</button><button type="button" class="wz-btn ghost" id="wzOpenStudio">İnce ayar: gelişmiş stüdyoda aç ›</button></div>
     </section>

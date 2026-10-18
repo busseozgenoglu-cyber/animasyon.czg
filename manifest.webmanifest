@@ -1,0 +1,13 @@
+{
+  "name": "Canlandır — Senaryodan Çizgi Film",
+  "short_name": "Canlandır",
+  "description": "Senaryoyu yaz, karakter resimlerini yükle; çizgi filmi program kursun. GIF, MP4, WebM olarak indir.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#080b12",
+  "theme_color": "#0b0f17",
+  "lang": "tr",
+  "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

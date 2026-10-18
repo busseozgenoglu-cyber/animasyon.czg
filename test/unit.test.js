@@ -197,6 +197,13 @@ console.log("Senaryo ayrıştırıcı (Director)");
   const parts = D.splitLine("Bu çok uzun bir cümle. İkinci cümle burada! Üçüncü cümle de var mı? Evet var.", 40);
   ok(parts.length >= 2 && parts.every((x) => x.length <= 40), "uzun replik cümle sınırından bölündü: " + parts.length + " parça");
   ok(D.placeKind("Köy meydanı") === "kir" && D.placeKind("Şehir meydanı") === "sehir" && D.placeKind("Ormanın derinlikleri") === "orman" && D.placeKind("Ayşe'nin odası") === "ic" && D.placeKind("Plaj") === "deniz" && D.placeKind("Uzay istasyonu") === "uzay", "mekân türü sınıflandırması (eklerle)");
+  const hug = D.analyzeAction("Ali Ayşe'ye sarılır.", names, []);
+  ok(hug.act === "hug" && hug.subjects.join() === "Ali" && hug.target === "Ayşe", "sarılma: özne ve hedef");
+  ok(["Ali yere yatar.", "Ayşe alkışlar.", "Ali şarkı söyler.", "Ayşe geri çekilir.", "Ali uyanır.", "Ali topu atar.", "Ayşe topu yakalar.", "Ali kayar.", "Ayşe esner."].map((t) => D.analyzeAction(t, names, []).act).join() === "lie,clap,sing,back,wake,throw,catch,slide,yawn", "yeni eylemler tanınıyor");
+  ok(D.analyzeAction("Ali adım atar.", names, []).act === "walk", "“adım atar” yürüme sayılır (atar ile karışmaz)");
+  const cand = D.analyze("SAHNE 1 - PARK\nALİ: Selam\nKöpek havlar.\nSonra zıplar.", ["Ali"]).stats;
+  ok(cand.candidates.join() === "Köpek" && cand.unknownActions.length === 1, "öznesi bilinmeyen eylemden karakter adayı: Köpek");
+  ok(D.analyze("SAHNE 1\nALİ: \nALİ: Merhaba", []).stats.lines === 1, "boş replik satırı sayılmaz");
   const ast2 = D.parse("PARK - GECE\nANLATICI: Gece oldu.\nİÇ. EV - SABAH\nALİ (fısıldayarak): Şşş.");
   ok(ast2.scenes.length === 2 && ast2.scenes[0].time === "gece" && ast2.scenes[0].items[0].type === "narration" && ast2.scenes[1].place === "EV" && ast2.scenes[1].items[0].emotion === "fısıldayarak", "büyük harf başlık, İÇ./DIŞ. biçimi, anlatıcı ve parantez duygusu");
 }

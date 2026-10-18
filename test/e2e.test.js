@@ -243,10 +243,30 @@ async function png(page, name, w, h, drawSrc) {
     const txt = await page.evaluate(() => document.getElementById("wzText").value);
     check(/SAHNE \d+ - MEKÂN - GÜNDÜZ\n[^\n]+: Selam!$/.test(txt.slice(-60)), "düğmeler sahne ve replik satırı ekledi");
     await page.click("#wzSample");
+    // Karakter adını değiştir → senaryo güncellenir
+    await page.evaluate(() => { const c = App.S.project.script.cast.find((x) => x.name === "Ayşe"); if (c) App.renameCast(c.id, "Zeynep"); });
+    const renamed = await page.evaluate(() => App.S.project.script.text);
+    check(/ZEYNEP \(mutlu\): Ali! Bak ne buldum!/.test(renamed) && /Zeynep sağdan koşarak girer\./.test(renamed) && /Ali Ayşe'ye doğru yürür\./.test(renamed), "ad değişince senaryo güncellendi (ekli 'Ayşe'ye' dokunulmadı)");
+    await page.evaluate(() => { const c = App.S.project.script.cast.find((x) => x.name === "Zeynep"); App.renameCast(c.id, "Ayşe"); });
+    // Dikey biçim seç
+    await page.click('#wzFormat button[data-size="1080x1920"]');
+    check((await page.evaluate(() => App.S.project.width + "x" + App.S.project.height)) === "1080x1920", "film biçimi dikey oldu");
     await page.click("#wzBuild");
     await page.waitForFunction(() => Easy.step === 3, null, { timeout: 30000 });
     await page.waitForTimeout(600);
     check((await page.evaluate(() => document.getElementById("wzCanvas").width)) > 100 && /sahne/.test(await page.textContent("#wzFilmInfo")), "3. adımda önizleme tuvali ve özet var");
+    const bgInfo = await page.evaluate(() => { const s = App.S.project.scenes[1], L = s.layers[0]; return { name: L.name, locked: L.locked, keys: Motion.keyTimes(L).length, portrait: document.getElementById("wzCanvas").height > document.getElementById("wzCanvas").width }; });
+    check(bgInfo.name === "Arka plan" && bgInfo.locked && bgInfo.keys === 2 && bgInfo.portrait, "arka plan kilitli katman, kamera yaklaşması anahtarlı, dikey önizleme");
+    // Müzik ekle (sessiz WAV) → videoya ses kanalı girer
+    const wav = Buffer.alloc(44 + 8000 * 2); wav.write("RIFF", 0); wav.writeUInt32LE(36 + 16000, 4); wav.write("WAVEfmt ", 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(16000, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write("data", 36); wav.writeUInt32LE(16000, 40);
+    for (let i = 0; i < 8000; i++) wav.writeInt16LE(Math.round(Math.sin(i / 8000 * 440 * 6.283) * 8000), 44 + i * 2);
+    await page.setInputFiles("#fileAudio", [{ name: "muzik.wav", mimeType: "audio/wav", buffer: wav }]);
+    await page.waitForFunction(() => App.S.project.audio && App.S.project.audio.name === "muzik.wav", null, { timeout: 10000 });
+    check(/muzik\.wav/.test(await page.textContent("#wzMusic")), "müzik eklendi ve 3. adımda görünüyor");
+    const [dlMus] = await Promise.all([page.waitForEvent("download", { timeout: 120000 }), page.evaluate(() => Exporter.exportVideo(App.S.project, { format: "webm", scale: 0.5, quality: "low", range: 0 }, null, { cancelled: false }).then((r) => Exporter.download(r.blob, "sesli.webm")))]);
+    await dlMus.saveAs(path.join(OUT, "sesli.webm"));
+    check(fs.statSync(path.join(OUT, "sesli.webm")).size > 2000, "sesli WebM üretildi (ses kanalı ffprobe ile ayrıca kontrol edilir)");
+    await page.evaluate(() => App.removeAudio());
     const [dlEasy] = await Promise.all([page.waitForEvent("download", { timeout: 180000 }), page.click('#wizard [data-fmt="gif"]')]);
     await dlEasy.saveAs(path.join(OUT, "kolay.gif"));
     check(fs.statSync(path.join(OUT, "kolay.gif")).size > 5000, "kolay moddan tek tıkla GIF indirildi");

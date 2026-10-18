@@ -71,8 +71,9 @@
     document.querySelectorAll("#wizard .wz-step").forEach(function (s) { s.hidden = +s.getAttribute("data-step") !== step; });
     document.querySelectorAll("#wzSteps li").forEach(function (li) { var n = +li.getAttribute("data-step"); li.classList.toggle("active", n === step); li.classList.toggle("done", n < step); });
     $("wizard").scrollTop = 0;
-    if (step === 3) { renderFilmInfo(); startPreview(); } else stopPreview();
-    if (step === 2) { renderSummary(); setTimeout(function () { if (!$("wzText").value) $("wzText").focus(); }, 50); }
+    if (step === 1) { renderCast(); renderBgs(); }
+    if (step === 3) { renderFilmInfo(); renderMusic(); startPreview(); } else stopPreview();
+    if (step === 2) { renderFormat(); renderSettings(); renderSummary(); setTimeout(function () { if (!$("wzText").value) $("wzText").focus(); }, 50); }
   };
 
   /* ── 1 · Karakterler ───────────────────────────────────────── */
@@ -111,9 +112,10 @@
         h("button", { type: "button", class: "small danger", title: "Karakteri sil", onclick: function () { if (c.images.length && !confirm("“" + c.name + "” silinsin mi?")) return; App().removeCastMember(c.id); renderCast(); renderSummary(); } }, "Sil")), details));
     });
     box.appendChild(h("button", { type: "button", class: "wz-card add", onclick: function () {
-      var m = App().addCastMember("Karakter " + (sc.cast.length + 1)); renderCast();
+      var m = App().addCastMember("Karakter " + (sc.cast.length + 1));
+      App().pickCastImages(m.id);            // dosya seçici kullanıcı dokunuşuyla aynı anda açılır (Safari gerektirir)
+      renderCast();
       var inputs = box.querySelectorAll(".wz-name"); var last = inputs[inputs.length - 1]; if (last) { last.focus(); last.select(); }
-      setTimeout(function () { App().pickCastImages(m.id); }, 250);
     } }, h("span", { class: "big" }, "＋"), h("b", null, "Karakter ekle"), h("small", null, sc.cast.length ? "bir karakter daha" : "ad ver, resim yükle")));
   }
   Easy.refreshCast = function () { if (Easy.open) { renderCast(); renderBgs(); renderSummary(); } };
@@ -134,16 +136,19 @@
     try { root.Director.parse($("wzText").value).speakers.forEach(function (s) { if (names.map(root.Director.norm).indexOf(root.Director.norm(s)) < 0) names.push(s); }); } catch (e) { /* yoksay */ }
     return names;
   }
-  function insertLine(text, cursorBack, blankBefore) {
+  /* İmlecin bulunduğu satırın altına satır ekler; opts.select = [baş, son] metin içinde seçilecek aralık (yer tutucu) */
+  function insertLine(text, opts) {
+    opts = opts || {};
     var ta = $("wzText"), v = ta.value, pos = ta.selectionEnd == null ? v.length : ta.selectionEnd;
     var lineEnd = v.indexOf("\n", pos); if (lineEnd < 0) lineEnd = v.length;
     var before = v.slice(0, lineEnd), after = v.slice(lineEnd);
     var prefix = before.length ? (before.endsWith("\n") ? "" : "\n") : "";
-    if (blankBefore && before.trim().length) prefix += "\n";
-    var ins = prefix + text;
+    if (opts.blankBefore && before.trim().length) prefix += "\n";
+    var ins = prefix + text, base = before.length + prefix.length;
     ta.value = before + ins + after;
-    var caret = before.length + ins.length - (cursorBack || 0);
-    ta.focus(); ta.setSelectionRange(caret, caret);
+    ta.focus();
+    if (opts.select) ta.setSelectionRange(base + opts.select[0], base + opts.select[1]);
+    else { var caret = before.length + ins.length; ta.setSelectionRange(caret, caret); }
     script().text = ta.value; App().commit(); renderSummary();
   }
   function closeMenus() { document.querySelectorAll(".wz-menu").forEach(function (m) { m.hidden = true; }); }
@@ -191,11 +196,36 @@
     var chips = h("div", { class: "sc-chips" }), withImg = sc.cast.filter(function (c) { return c.images.length; }).map(function (c) { return D.norm(c.name); });
     r.names.forEach(function (nm) { var ok = withImg.indexOf(D.norm(nm)) >= 0; chips.appendChild(h("span", { class: "chip " + (ok ? "ok" : "ph") }, (ok ? "✓ " : "◌ ") + nm + (ok ? "" : " (resimsiz: yer tutucu)"))); });
     if (r.names.length) box.appendChild(chips);
+    if (st.candidates.length) {
+      var cand = h("div", { class: "sc-chips" }, h("span", { class: "muted" }, "Karakter mi? "));
+      st.candidates.forEach(function (nm) { cand.appendChild(h("button", { type: "button", class: "chip ph", style: "cursor:pointer", title: "Karakter olarak ekle", onclick: function () { App().addCastMember(nm); renderSummary(); } }, "+ " + nm)); });
+      box.appendChild(cand);
+    }
     var warns = [];
     st.unknownActions.slice(0, 5).forEach(function (a) { warns.push("“" + a + "” anlaşılmadı; bekleme olarak işlenir. Eylem düğmelerindeki kalıpları kullan."); });
     if (!st.lines && !st.actions) warns.push("Henüz replik ya da eylem yok.");
     if (warns.length) box.appendChild(h("ul", { class: "warn" }, warns.map(function (w) { return h("li", null, w); })));
   }
+
+  /* Film biçimi ve ince ayarlar (2. adım) */
+  function renderFormat() {
+    var p = project();
+    document.querySelectorAll("#wzFormat button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-size") === p.width + "x" + p.height); });
+  }
+  function renderSettings() {
+    var st = script().settings;
+    $("wzCharHeight").value = Math.round(st.charHeight * 100); $("wzCharHeightLabel").textContent = "%" + Math.round(st.charHeight * 100);
+    $("wzSpeed").value = st.speed; $("wzBubble").value = st.bubbleStyle;
+    $("wzTitle").checked = st.titleCard; $("wzEnd").checked = st.endCard; $("wzHeadings").checked = st.headings;
+  }
+  function renderMusic() {
+    var p = project(), box = $("wzMusic");
+    box.innerHTML = "";
+    if (p.audio) box.appendChild(h("span", { class: "name" }, "🎵 " + p.audio.name + " — videolara eklenir (GIF sessizdir)"));
+    box.appendChild(h("button", { type: "button", class: "wz-btn", onclick: function () { $("fileAudio").value = ""; $("fileAudio").click(); } }, p.audio ? "Müziği değiştir" : "🎵 Müzik / ses ekle (MP3, WAV)"));
+    if (p.audio) box.appendChild(h("button", { type: "button", class: "wz-btn ghost", onclick: function () { App().removeAudio(); renderMusic(); } }, "Kaldır"));
+  }
+  Easy.refreshFilm = function () { if (Easy.open && Easy.step === 3) { renderMusic(); renderFilmInfo(); } };
 
   /* ── 3 · Film ──────────────────────────────────────────────── */
   function renderFilmInfo() {
@@ -212,8 +242,10 @@
   }
   function fitCanvas() {
     var p = project(), c = $("wzCanvas"), wrap = c.parentElement;
-    var maxW = Math.min(960, wrap.clientWidth - 2), w = Math.round(maxW), hgt = Math.round(w * p.height / p.width);
-    if (hgt > window.innerHeight * 0.55) { hgt = Math.round(window.innerHeight * 0.55); w = Math.round(hgt * p.width / p.height); }
+    var full = !!document.fullscreenElement;
+    var maxW = Math.min(full ? wrap.clientWidth : 960, wrap.clientWidth - 2), w = Math.round(maxW), hgt = Math.round(w * p.height / p.width);
+    var maxH = full ? window.innerHeight - 70 : window.innerHeight * 0.55;
+    if (hgt > maxH) { hgt = Math.round(maxH); w = Math.round(hgt * p.width / p.height); }
     c.width = Math.max(2, w); c.height = Math.max(2, hgt);
     preview.canvas = c; preview.ctx = c.getContext("2d");
   }
@@ -273,6 +305,7 @@
     prog.hidden = false; bar.style.width = "0%"; txt.textContent = "Hazırlanıyor…"; res.innerHTML = "";
     document.querySelectorAll("#wizard [data-fmt]").forEach(function (b) { b.disabled = true; });
     exportCtl = { cancelled: false };
+    $("wizard").scrollTo({ top: prog.offsetTop - 120, behavior: "smooth" });
     var base = "canlandir-" + X.safeName(p.name), job;
     function onProgress(pr) { var pct = pr.total ? Math.round(pr.done / pr.total * 100) : 0; bar.style.width = pct + "%"; txt.textContent = pr.phase + " · %" + pct; }
     // GIF: paylaşıma uygun küçük boyut (en fazla 480 px genişlik, 12 fps, titremesiz); uzun filmlerde video önerilir
@@ -309,7 +342,7 @@
     document.querySelectorAll("#wizard [data-ins]").forEach(function (b) {
       b.addEventListener("click", function () {
         var kind = b.getAttribute("data-ins");
-        if (kind === "scene") { var n = root.Director.parse($("wzText").value).scenes.length + 1; insertLine("SAHNE " + n + " - MEKÂN - GÜNDÜZ", 14, true); }
+        if (kind === "scene") { var n = root.Director.parse($("wzText").value).scenes.length + 1, head = "SAHNE " + n + " - "; insertLine(head + "MEKÂN - GÜNDÜZ", { select: [head.length, head.length + 5], blankBefore: true }); }
         else if (kind === "narr") insertLine("ANLATICI: ");
       });
     });
@@ -321,6 +354,21 @@
     $("wzSeek").addEventListener("input", function () { var total = root.Exporter.totalDuration(project()); preview.T = +$("wzSeek").value / 1000 * total; preview.T0 = preview.T; preview.wall = performance.now(); if (project().audio) { try { $("audioEl").currentTime = preview.T; } catch (e) { /* yoksay */ } } drawPreview(); });
     document.querySelectorAll("#wizard [data-fmt]").forEach(function (b) { b.addEventListener("click", function () { download(b.getAttribute("data-fmt")); }); });
     $("wzSaveProj").addEventListener("click", function () { App().saveProjectFile(); });
+    $("wzCancel").addEventListener("click", function () { if (exportCtl) exportCtl.cancelled = true; });
+    $("wzFull").addEventListener("click", function () { var el = document.querySelector(".wz-player"); if (document.fullscreenElement) document.exitFullscreen(); else if (el.requestFullscreen) el.requestFullscreen().catch(function () { /* yoksay */ }); });
+    document.addEventListener("fullscreenchange", function () { if (Easy.open && Easy.step === 3) { fitCanvas(); drawPreview(); } });
+    document.querySelectorAll("#wzFormat button").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var wh = b.getAttribute("data-size").split("x");
+        App().setStageSize(+wh[0], +wh[1]); renderFormat();
+        if (project().scenes.some(function (s) { return s.layers.length; })) App().toast("Biçim değişti; “Filmi üret” deyince yeni biçimde kurulur");
+      });
+    });
+    $("wzCharHeight").addEventListener("input", function () { var v = parseInt($("wzCharHeight").value, 10); script().settings.charHeight = v / 100; $("wzCharHeightLabel").textContent = "%" + v; });
+    $("wzCharHeight").addEventListener("change", function () { App().commit(); });
+    $("wzSpeed").addEventListener("change", function () { script().settings.speed = $("wzSpeed").value; App().commit(); renderSummary(); });
+    $("wzBubble").addEventListener("change", function () { script().settings.bubbleStyle = $("wzBubble").value; App().commit(); });
+    [["wzTitle", "titleCard"], ["wzEnd", "endCard"], ["wzHeadings", "headings"]].forEach(function (pair) { $(pair[0]).addEventListener("change", function () { script().settings[pair[1]] = $(pair[0]).checked; App().commit(); }); });
     window.addEventListener("resize", function () { if (Easy.open && Easy.step === 3) { fitCanvas(); drawPreview(); } });
     $("wzCanvas").addEventListener("click", function () { if (preview.playing) pausePreview(); else playPreview(); });
   };

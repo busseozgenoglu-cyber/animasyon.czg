@@ -79,6 +79,9 @@
   /* ── Eylem çözümleme ───────────────────────────────────────── */
   var ACTIONS = [
     ["turn", /\b(arkasini don|arkasina don|geri don|ters don)/],
+    ["hug", /\b(sarilir|sarildi|kucaklar|kucakladi|sarilarak)\b/],
+    ["back", /\b(geri cekilir|geri cekildi|gerisin geri|geri adim atar|bir adim geri|geriler|geriledi)\b/],
+    ["wake", /\b(uyanir|uyandi|gozlerini acar|uykudan kalkar)\b/],
     ["walk_to", /\b(yanina (gider|gelir|gitti|geldi|yurur|kosar|yaklasir)|dogru (gider|yurur|kosar|ilerler|yaklasir|gitti|yurudu|kostu)|yaklasir|yaklasti|yaklasiyor)\b/],
     ["enter", /\b(girer|girdi|giriyor|gelir|geldi|geliyor|ortaya cikar|belirir|belirdi|gorunur|gorundu|iceri girer|sahneye girer)\b/],
     ["exit", /\b(cikar|cikti|cikiyor|gider|gitti|gidiyor|ayrilir|ayrildi|uzaklasir|uzaklasti|kacar|kacti|kaybolur|kayboldu|yok olur|terk eder|sahneden cikar)\b/],
@@ -100,7 +103,15 @@
     ["sit", /\b(oturur|oturdu|oturuyor|coker|comelir)\b/],
     ["sleep", /\b(uyur|uyudu|uyuyor|uykuya dalar|uyuklar|horlar)\b/],
     ["think", /\b(dusunur|dusundu|dusunuyor|dusunceye dalar|kafasini kasir)\b/],
-    ["look", /\b(bakar|bakti|bakiyor|izler|izledi|gozlerini diker|suzer)\b/],
+    ["look", /\b(bakar|bakti|bakiyor|izler|izledi|gozlerini diker|suzer|gorur|gordu|fark eder|fark etti)\b/],
+    ["lie", /\b(yatar|yatti|uzanir|uzandi|yere uzanir|serilir)\b/],
+    ["clap", /\b(alkislar|alkisladi|el cirpar|ellerini cirpar)\b/],
+    ["sing", /\b(sarki soyler|sarki soyledi|mirildanir|islik calar|sarki soyluyor)\b/],
+    ["slide", /\b(kayar|kaydi|kayarak gider|kayiyor)\b/],
+    ["swim", /\b(yuzer|yuzdu|yuzuyor)\b/],
+    ["yawn", /\b(esner|esnedi|esniyor)\b/],
+    ["throw", /\b(atar|atti|firlatir|firlatti)\b/],
+    ["catch", /\b(yakalar|yakaladi|tutar|tuttu)\b/],
     ["grow", /\b(buyur|buyudu|devlesir|kocaman olur)\b/],
     ["shrink", /\b(kuculur|kuculdu|ufalir|minicik olur)\b/],
     ["nod", /\b(basini sallar|onaylar|kafa sallar|basiyla onaylar)\b/],
@@ -147,9 +158,9 @@
     var speed = /kosarak|hizla|hizli|cabucak|firlayarak|telasla/.test(n) ? "fast" : /yavasca|agir agir|yavas|usulca|sessizce|sakin/.test(n) ? "slow" : "normal";
     var sec = n.match(/(\d+(?:[.,]\d+)?)\s*(saniye|sn)\b/);
     var simultaneous = /\b(ayni anda|bu sirada|o sirada|ayni zamanda)\b/.test(n);
-    var subjects = found.slice(), target = null;
-    if ((act === "walk_to" || act === "look") && found.length >= 2) { target = found[1]; subjects = [found[0]]; }
-    else if ((act === "walk_to" || act === "look") && found.length === 1 && lastSubjects && lastSubjects.length && lastSubjects[0] !== found[0] && /\b(ona|yanina|dogru)\b/.test(n)) { target = found[0]; subjects = lastSubjects.slice(0, 1); }
+    var subjects = found.slice(), target = null, targeted = act === "walk_to" || act === "look" || act === "hug" || act === "throw";
+    if (targeted && found.length >= 2) { target = found[1]; subjects = [found[0]]; }
+    else if (targeted && found.length === 1 && lastSubjects && lastSubjects.length && lastSubjects[0] !== found[0] && /\b(ona|yanina|dogru|onu)\b/.test(n)) { target = found[0]; subjects = lastSubjects.slice(0, 1); }
     if (!subjects.length && !all && lastSubjects && lastSubjects.length && /^(o |sonra |ardindan |ve |hemen )/.test(n + " ")) subjects = lastSubjects.slice();
     return { act: act, subjects: subjects, all: all, target: target, dir: dir || (act === "enter" ? null : to), to: to, speed: speed,
       seconds: sec ? parseFloat(sec[1].replace(",", ".")) : null, emotion: emotionOf(text), simultaneous: simultaneous };
@@ -159,7 +170,7 @@
   function analyze(text, castNames) {
     var ast = parse(text), names = (castNames || []).slice();
     ast.speakers.forEach(function (s) { if (names.map(norm).indexOf(norm(s)) < 0) names.push(s); });
-    var stats = { scenes: ast.scenes.length, lines: 0, actions: 0, narrations: 0, seconds: 0, unknownActions: [], charactersWithoutImage: [] };
+    var stats = { scenes: ast.scenes.length, lines: 0, actions: 0, narrations: 0, seconds: 0, unknownActions: [], charactersWithoutImage: [], candidates: [] };
     ast.scenes.forEach(function (sc) {
       var last = [];
       stats.seconds += 1.5;
@@ -171,6 +182,10 @@
           var a = analyzeAction(it.text, names, last);
           if (a.subjects.length) last = a.subjects;
           if (!a.act) stats.unknownActions.push(it.text);
+          if (!a.subjects.length && !a.all && a.act !== "wait") {
+            var cand = candidateName(it.text);
+            if (cand && names.map(norm).indexOf(norm(cand)) < 0 && stats.candidates.indexOf(cand) < 0 && stats.candidates.length < 5) stats.candidates.push(cand);
+          }
           stats.seconds += a.seconds || ACTION_DUR[a.act] || 1.2;
         }
       });
@@ -183,7 +198,16 @@
   var SPEED = { slow: 0.095, normal: 0.072, fast: 0.055 };
   function lineDuration(text, speed) { return Math.max(1.5, Math.min(8, 1.2 + String(text).length * (SPEED[speed] || SPEED.normal))); }
   var ACTION_DUR = { enter: 1.1, exit: 1.0, walk: 1.6, walk_to: 1.6, run: 1.0, jump: 1.6, spin: 1.0, turn: 0.4, fall: 0.8, rise: 0.6, fly: 1.4, land: 1.0, wave: 1.4,
-    laugh: 1.2, cry: 1.6, angry: 1.4, surprise: 1.0, fear: 1.5, dance: 2.4, sit: 0.6, sleep: 1.5, think: 1.6, look: 0.5, grow: 0.9, shrink: 0.9, nod: 1.0, shake_head: 1.0, hide: 0.6, wait: 1.2 };
+    laugh: 1.2, cry: 1.6, angry: 1.4, surprise: 1.0, fear: 1.5, dance: 2.4, sit: 0.6, sleep: 1.5, think: 1.6, look: 0.5, grow: 0.9, shrink: 0.9, nod: 1.0, shake_head: 1.0, hide: 0.6, wait: 1.2,
+    hug: 1.6, back: 0.8, wake: 0.9, lie: 0.8, clap: 1.2, sing: 2.4, slide: 1.2, swim: 2.0, yawn: 1.4, throw: 0.7, catch: 0.6 };
+  var STOP_WORDS = /^(o|bu|su|sonra|ardindan|birden|aniden|hemen|ve|ama|fakat|derken|herkes|hepsi|ikisi|biraz|yavasca|hizla|once|simdi|iste|tam|bir|kisa|uzun|sahne|kamera|muzik|ses|isik)$/;
+  /* Öznesi anlaşılmayan eylemin ilk sözcüğü karakter adayıdır ("Köpek havlar." → Köpek) */
+  function candidateName(text) {
+    var first = String(text).trim().split(/\s+/)[0] || "";
+    first = first.replace(/[^\p{L}']/gu, "").split("'")[0];
+    if (first.length < 2 || STOP_WORDS.test(norm(first))) return "";
+    return titleCase(first);
+  }
 
   /* Replikleri balon boyutuna göre parçalara böler */
   function splitLine(text, maxChars) {
@@ -327,7 +351,8 @@
   function build(project) {
     var Model = root.Model, M = root.Motion, R = root.Render;
     var script = project.script, settings = script.settings || {};
-    var W = project.width, H = project.height, k = H / 720;
+    var W = project.width, H = project.height;
+    var base = Math.min(H, W * 1.1), k = base / 720;   // dikey/kare filmde ölçüler genişliğe göre küçülür
     var res = analyze(script.text, script.cast.map(function (c) { return c.name; }));
     var ast = res.ast, warnings = [], stats = res.stats;
     if (!ast.scenes.length || !ast.scenes.some(function (s) { return s.items.length; })) throw new Error("Senaryoda sahne ya da replik bulunamadı. Örnek senaryoya bakın.");
@@ -383,8 +408,9 @@
       return best;
     }
 
-    var speed = settings.speed || "normal", charH = (settings.charHeight || 0.42) * H, groundY = Math.round(H * 0.9);
-    var bubbleFont = Math.round(H * 0.042), bubbleMaxW = Math.round(W * 0.36), bubbleChars = Math.round(bubbleMaxW / (bubbleFont * 0.5) * 2.2);
+    var speed = settings.speed || "normal", charH = (settings.charHeight || 0.42) * base, groundY = Math.round(H * 0.9);
+    var bubbleFont = Math.round(base * 0.042), bubbleMaxW = Math.round(W * (W < H ? 0.72 : W === H ? 0.5 : 0.36));
+    var bubbleChars = Math.max(40, Math.round(bubbleMaxW / (bubbleFont * 0.5)) * 3);   // balon başına en çok ~3 satır
     var fonts = Model.FONTS;
     var scenes = [];
 
@@ -409,16 +435,17 @@
     }
 
     /* Başlık kartı */
-    if (settings.titleCard !== false && ast.title) {
+    var filmTitle = ast.title || ((project.name && project.name !== "Adsız Film" && project.name !== "Örnek Film") ? project.name : "");
+    if (settings.titleCard !== false && filmTitle) {
       var ts = Model.newScene("Başlık", 3);
       ts.background = { type: "gradient", color: "#1d2a44", color2: "#07090f", angle: 180, assetId: null };
-      var title = textLayer("Film adı", ast.title, { base: { x: W / 2, y: H * (ast.author ? 0.44 : 0.5), rot: -2, sx: 1, sy: 1, opacity: 1 },
-        text: { size: Math.round(H * 0.13), font: fonts[2].id, color: "#ffffff", stroke: "#7b2fff", strokeWidth: Math.round(6 * k), bubble: false, maxWidth: Math.round(W * 0.85) } });
+      var title = textLayer("Film adı", filmTitle, { base: { x: W / 2, y: H * (ast.author ? 0.44 : 0.5), rot: -2, sx: 1, sy: 1, opacity: 1 },
+        text: { size: Math.round(base * 0.13), font: fonts[2].id, color: "#ffffff", stroke: "#7b2fff", strokeWidth: Math.round(6 * k), bubble: false, maxWidth: Math.round(W * 0.85) } });
       fx(title, "zoomIn", 0, 0.9); fx(title, "float", 0, null, { strength: 4 * k, speed: 0.4, tilt: 1 }); fx(title, "fadeOut", 2.5, 3);
       ts.layers.push(title);
       if (ast.author) {
         var by = textLayer("Yazan", "Yazan: " + ast.author, { start: 0.8, base: { x: W / 2, y: H * 0.62, rot: 0, sx: 1, sy: 1, opacity: 1 },
-          text: { size: Math.round(H * 0.045), font: fonts[0].id, color: "#cfe9ff", bubble: false, weight: "400", maxWidth: Math.round(W * 0.8) } });
+          text: { size: Math.round(base * 0.045), font: fonts[0].id, color: "#cfe9ff", bubble: false, weight: "400", maxWidth: Math.round(W * 0.8) } });
         fx(by, "fadeIn", 0.8, 1.4); fx(by, "fadeOut", 2.5, 3);
         ts.layers.push(by);
       }
@@ -431,10 +458,16 @@
       var sc = Model.newScene((sa.place || "Sahne " + sa.index) + (sa.time ? " · " + TIME_LABEL[sa.time] : ""), 4);
       var time = sa.time || "gunduz", kind = placeKind(sa.place), outdoor = kind !== "ic" && kind !== "uzay";
       var userBg = pickBackground(sa);
-      if (userBg) sc.background = { type: "image", color: "#000000", color2: "#000000", angle: 0, assetId: userBg.assetId };
-      else {
-        sc.background = { type: "image", color: "#000000", color2: "#000000", angle: 0, assetId: genAsset("bg:" + kind + ":" + time + ":" + W + "x" + H, "arka plan " + kind + " " + time + ".png", function () { return drawBackground(kind, time, W, H); }) };
-        if (outdoor) {
+      var bgAssetId = userBg ? userBg.assetId : genAsset("bg:" + kind + ":" + time + ":" + W + "x" + H, "arka plan " + kind + " " + time + ".png", function () { return drawBackground(kind, time, W, H); });
+      sc.background = { type: "color", color: (SKY[time] || SKY.gunduz)[0], color2: "#000000", angle: 0, assetId: null };
+      var bgA = project.assets[bgAssetId], cover = Math.max(W / (bgA ? bgA.width : W), H / (bgA ? bgA.height : H));
+      var bgL = Model.newLayer("image", { name: "Arka plan", frames: [bgAssetId], base: { x: W / 2, y: H / 2, rot: 0, sx: cover, sy: cover, opacity: 1 } });
+      bgL.locked = true;
+      var pushIn = scenes.length % 2 === 0;   // sahneler sırayla yaklaşır / uzaklaşır: durağan değil, sinema hissi
+      bgL.base.sx = bgL.base.sy = pushIn ? cover : cover * 1.05;
+      sc.layers.push(bgL);
+      {
+        if (!userBg && outdoor) {
           [[0.22, 0.14, 0.85, 22, 0], [0.68, 0.2, 0.6, 14, 1]].forEach(function (cl, i) {
             var cid = genAsset("cloud:" + i, "bulut-" + (i + 1) + ".png", function () { return drawCloud(i); });
             var L = Model.newLayer("image", { name: "Bulut " + (i + 1), frames: [cid], base: { x: W * cl[0], y: H * cl[1], rot: 0, sx: cl[2] * k, sy: cl[2] * k, opacity: time === "gece" ? 0.35 : 0.95 } });
@@ -497,6 +530,8 @@
         return L;
       }
       function curX(kn, t) { var c = chars[kn]; return M.trackValue(c.layer.tracks.x, t, c.layer.base.x); }
+      function charW(kn) { var c = chars[kn], a = project.assets[c.def.pose]; return (a ? a.width : 240) * Math.abs(c.scale || 1); }
+      function besideDist(kn, other, factor) { return (charW(kn) + charW(other)) / 2 * (factor || 1.05); }
       function moveTo(kn, nx, t0, dur, mode) {
         var c = chars[kn], L = c.layer;
         nx = Math.max(W * 0.06, Math.min(W * 0.94, Math.round(nx)));
@@ -522,10 +557,10 @@
       function emote(kn, emotion, a, b) {
         var L = chars[kn].layer;
         if (!emotion) return;
-        if (emotion === "mutlu") fx(L, "bounce", a, b, { strength: Math.round(H * 0.03), speed: 1.6, squash: 25 });
+        if (emotion === "mutlu") fx(L, "bounce", a, b, { strength: Math.round(base * 0.03), speed: 1.6, squash: 25 });
         else if (emotion === "uzgun") { fx(L, "lean", a, b, { angle: -7, ramp: 0.5 }); fx(L, "float", a, b, { strength: Math.round(3 * k), speed: 0.6, tilt: 0 }); }
         else if (emotion === "kizgin") { fx(L, "shake", a, b, { strength: Math.round(5 * k), speed: 1.3 }); fx(L, "lean", a, b, { angle: 4, ramp: 0.3 }); }
-        else if (emotion === "saskin") { fx(L, "jelly", a, Math.min(b, a + 0.9), { strength: 14, speed: 2.5 }); fx(L, "bounce", a, Math.min(b, a + 0.8), { strength: Math.round(H * 0.025), speed: 1.2, squash: 15 }); }
+        else if (emotion === "saskin") { fx(L, "jelly", a, Math.min(b, a + 0.9), { strength: 14, speed: 2.5 }); fx(L, "bounce", a, Math.min(b, a + 0.8), { strength: Math.round(base * 0.025), speed: 1.2, squash: 15 }); }
         else if (emotion === "korkmus") { fx(L, "shake", a, b, { strength: Math.round(3 * k), speed: 2.2 }); fx(L, "lean", a, b, { angle: -5, ramp: 0.3 }); }
         else if (emotion === "dusunceli") { fx(L, "lean", a, b, { angle: 3, ramp: 0.4 }); }
         else if (emotion === "yorgun") { fx(L, "lean", a, b, { angle: -4, ramp: 0.6 }); }
@@ -536,7 +571,7 @@
         var size = emotion === "fisilti" ? Math.round(bubbleFont * 0.85) : emotion === "kizgin" ? Math.round(bubbleFont * 1.12) : bubbleFont;
         var L = textLayer("Replik · " + c.def.name + ": " + text.slice(0, 22) + (text.length > 22 ? "…" : ""), text, {
           start: a, end: b, anchor: { x: 0.5, y: 1 },
-          base: { x: cx, y: headTop - Math.round(H * 0.015), rot: ((hash(text) % 5) - 2) * 0.7, sx: 1, sy: 1, opacity: 1 },
+          base: { x: cx, y: headTop - Math.round(base * 0.015), rot: ((hash(text) % 5) - 2) * 0.7, sx: 1, sy: 1, opacity: 1 },
           text: { size: size, bubbleColor: bubbleColor, color: "#1b1f2a", bubble: true, bubbleTail: "left", weight: emotion === "kizgin" ? "700" : "700" }
         });
         var sz = R.layerSize(L, project);
@@ -571,7 +606,7 @@
       if (settings.headings !== false && sa.place) {
         var hd = textLayer("Sahne başlığı", (sa.place + (sa.time ? " · " + TIME_LABEL[sa.time] : "")).toLocaleUpperCase("tr"), { start: 0, end: 2.8, anchor: { x: 0, y: 0 },
           base: { x: Math.round(W * 0.03), y: Math.round(H * 0.045), rot: 0, sx: 1, sy: 1, opacity: 1 },
-          text: { size: Math.round(H * 0.03), font: fonts[0].id, color: "#ffffff", stroke: "rgba(0,0,0,.6)", strokeWidth: Math.round(3 * k), bubble: false, weight: "700", maxWidth: Math.round(W * 0.6) } });
+          text: { size: Math.round(base * 0.03), font: fonts[0].id, color: "#ffffff", stroke: "rgba(0,0,0,.6)", strokeWidth: Math.round(3 * k), bubble: false, weight: "700", maxWidth: Math.round(W * 0.8) } });
         fx(hd, "fadeIn", 0, 0.35); fx(hd, "fadeOut", 2.3, 2.8);
         sc.layers.push(hd);
       }
@@ -593,10 +628,15 @@
             setFacing(kn, curX(lastSpeaker, t) > curX(kn, t) ? 1 : -1, t);
             setFacing(lastSpeaker, curX(kn, t) > curX(lastSpeaker, t) ? 1 : -1, t);
           }
+          if (lastSpeaker && lastSpeaker !== kn && chars[lastSpeaker].present && chars[lastSpeaker].layer) fx(chars[lastSpeaker].layer, "swing", t, t + 0.7, { strength: 2, speed: 1.4 });   // dinleyen hafifçe başını sallar
           chunks.forEach(function (ch) {
             var d = lineDuration(ch, speed) * (emotion === "fisilti" ? 1.15 : 1);
             bubble(kn, ch, t, t + d, emotion);
             talk(kn, t + 0.1, t + d - 0.2, emotion);
+            if (!emotion) {
+              if (/!\s*$/.test(ch)) fx(chars[kn].layer, "bounce", t, t + 0.7, { strength: Math.round(base * 0.018), speed: 1.4, squash: 12 });
+              else if (/\?\s*$/.test(ch)) fx(chars[kn].layer, "lean", t, t + d, { angle: 3, ramp: 0.4 });
+            }
             t += d + 0.3;
           });
           lastSpeaker = kn;
@@ -609,7 +649,11 @@
         var dur = a.seconds || ACTION_DUR[a.act] || 1.2;
         if (a.speed === "fast") dur *= 0.7; else if (a.speed === "slow") dur *= 1.6;
         if (!a.act) { warnings.push("Satır " + it.line + ": “" + it.text + "” anlaşılamadı; " + dur.toFixed(1) + " sn bekleme olarak işlendi."); t = start + dur; return; }
-        if (!subs.length && a.act !== "wait") { warnings.push("Satır " + it.line + ": “" + it.text + "” kimin yaptığı anlaşılamadı."); t = start + dur; return; }
+        if (!subs.length && a.act !== "wait") {
+          var cand = candidateName(it.text);
+          warnings.push("Satır " + it.line + ": “" + it.text + "” kimin yaptığı anlaşılamadı." + (cand ? " “" + cand + "” bir karakterse 1. adımda ekle." : ""));
+          t = start + dur; return;
+        }
         subs.forEach(function (kn) {
           var c = chars[kn], L;
           switch (a.act) {
@@ -627,8 +671,15 @@
               L = ensurePresent(kn, start);
               if (a.act === "hide") { fx(L, "fadeOut", start, start + dur); }
               else {
-                var dir2 = a.dir || (curX(kn, start) < W / 2 ? "left" : "right");
-                fx(L, "slideOut", start, start + dur, { dir: dir2, easing: a.speed === "fast" ? "easeInQuad" : "easeInCubic" });
+                var dir2 = a.dir || (subs.length > 1 ? (subs.reduce(function (sum, q) { return sum + curX(q, start); }, 0) / subs.length < W / 2 ? "left" : "right") : (curX(kn, start) < W / 2 ? "left" : "right"));
+                if (subs.length > 1 && (dir2 === "left" || dir2 === "right")) {
+                  // Birlikte çıkanlar aynı hızda yürür: ortak mesafe, kimse kimseyi yakalamaz
+                  var common = 0;
+                  subs.forEach(function (q) { common = Math.max(common, Math.abs(charW(q)) / 2 + (dir2 === "left" ? curX(q, start) : W - curX(q, start)) + 24); });
+                  var x0 = curX(kn, start);
+                  key(L, "x", start, x0, a.speed === "fast" ? "easeInQuad" : "linear");
+                  key(L, "x", start + dur, x0 + (dir2 === "left" ? -common : common), "linear");
+                } else fx(L, "slideOut", start, start + dur, { dir: dir2, easing: a.speed === "fast" ? "easeInQuad" : "easeInCubic" });
                 walkCycle(kn, start, start + dur, a.speed === "fast" ? 3.2 : 2.2);
                 if (dir2 === "left" || dir2 === "right") setFacing(kn, dir2 === "left" ? -1 : 1, start);
               }
@@ -645,11 +696,11 @@
             case "walk_to": {
               ensurePresent(kn, start);
               var tk = a.target ? norm(a.target) : null;
-              if (tk && chars[tk] && chars[tk].present) { var tx = curX(tk, start), side = curX(kn, start) < tx ? -1 : 1; moveTo(kn, tx + side * charH * 0.45, start, dur, a.speed === "fast" ? "run" : "walk"); }
+              if (tk && chars[tk] && chars[tk].present) { var tx = curX(tk, start), side = curX(kn, start) < tx ? -1 : 1; moveTo(kn, tx + side * besideDist(kn, tk, 1.05), start, dur, a.speed === "fast" ? "run" : "walk"); }
               else moveTo(kn, curX(kn, start) + (c.facing >= 0 ? 1 : -1) * W * 0.2, start, dur, "walk");
               break;
             }
-            case "jump": ensurePresent(kn, start); fx(c.layer, "bounce", start, start + dur, { strength: Math.round(H * 0.09), speed: 1.25, squash: 35 }); break;
+            case "jump": ensurePresent(kn, start); fx(c.layer, "bounce", start, start + dur, { strength: Math.round(base * 0.09), speed: 1.25, squash: 35 }); break;
             case "spin": ensurePresent(kn, start); fx(c.layer, "spin", start, start + dur, { speed: 1 / dur, dir: "cw" }); break;
             case "turn": ensurePresent(kn, start); setFacing(kn, -c.facing || -1, start + 0.1); break;
             case "fall": {
@@ -674,14 +725,35 @@
               if (c.fl) { c.fl.end = start; c.fl = null; } c.flying = false; break;
             }
             case "wave": ensurePresent(kn, start); fx(c.layer, "swing", start, start + dur, { strength: 6, speed: 2.5 }); break;
-            case "laugh": ensurePresent(kn, start); fx(c.layer, "bounce", start, start + dur, { strength: Math.round(H * 0.02), speed: 3, squash: 20 }); break;
+            case "laugh": ensurePresent(kn, start); fx(c.layer, "bounce", start, start + dur, { strength: Math.round(base * 0.02), speed: 3, squash: 20 }); break;
             case "cry": ensurePresent(kn, start); fx(c.layer, "lean", start, start + dur, { angle: -8, ramp: 0.4 }); fx(c.layer, "shake", start, start + dur, { strength: Math.round(2 * k), speed: 1.5 }); break;
             case "angry": ensurePresent(kn, start); fx(c.layer, "shake", start, start + dur, { strength: Math.round(7 * k), speed: 1.2 }); fx(c.layer, "jelly", start, start + dur, { strength: 8, speed: 2 }); break;
-            case "surprise": ensurePresent(kn, start); fx(c.layer, "jelly", start, start + dur, { strength: 18, speed: 2.5 }); fx(c.layer, "bounce", start, start + Math.min(dur, 0.9), { strength: Math.round(H * 0.03), speed: 1.1, squash: 20 }); break;
+            case "surprise": ensurePresent(kn, start); fx(c.layer, "jelly", start, start + dur, { strength: 18, speed: 2.5 }); fx(c.layer, "bounce", start, start + Math.min(dur, 0.9), { strength: Math.round(base * 0.03), speed: 1.1, squash: 20 }); break;
             case "fear": ensurePresent(kn, start); fx(c.layer, "shake", start, start + dur, { strength: Math.round(4 * k), speed: 2.2 }); fx(c.layer, "lean", start, start + dur, { angle: -6, ramp: 0.3 }); break;
-            case "dance": ensurePresent(kn, start); fx(c.layer, "wobble", start, start + dur, { strength: 10, speed: 2, bob: Math.round(H * 0.02) }); fx(c.layer, "jelly", start, start + dur, { strength: 10, speed: 2 }); break;
+            case "dance": ensurePresent(kn, start); fx(c.layer, "wobble", start, start + dur, { strength: 10, speed: 2, bob: Math.round(base * 0.02) }); fx(c.layer, "jelly", start, start + dur, { strength: 10, speed: 2 }); break;
             case "sit": { L = ensurePresent(kn, start); key(L, "sy", start, M.trackValue(L.tracks.sy, start, c.scale)); key(L, "sy", start + dur, c.scale * 0.8, "easeOutQuad"); c.sitting = true; break; }
-            case "sleep": { ensurePresent(kn, start); fx(c.layer, "lean", start, null, { angle: -12, ramp: 0.8 }); thought(kn, "Zzz", start + 0.5, start + dur + 2.5); break; }
+            case "sleep": { ensurePresent(kn, start); c.sleepFx = fx(c.layer, "lean", start, null, { angle: -12, ramp: 0.8 }); thought(kn, "Zzz", start + 0.5, start + dur + 2.5); break; }
+            case "wake": { L = ensurePresent(kn, start); if (c.sleepFx) { c.sleepFx.end = start + 0.4; c.sleepFx = null; } fx(L, "jelly", start, start + dur, { strength: 12, speed: 2.5 }); if (c.fallen) { key(L, "rot", start, M.trackValue(L.tracks.rot, start, 0)); key(L, "rot", start + dur, 0); c.fallen = false; } break; }
+            case "lie": { L = ensurePresent(kn, start); key(L, "rot", start, M.trackValue(L.tracks.rot, start, 0)); key(L, "rot", start + dur, c.facing >= 0 ? -80 : 80, "easeInOutQuad"); c.fallen = true; break; }
+            case "hug": {
+              ensurePresent(kn, start);
+              var hk = a.target ? norm(a.target) : null;
+              if (hk && chars[hk] && chars[hk].present) {
+                var hx = curX(hk, start), hside = curX(kn, start) < hx ? -1 : 1;
+                moveTo(kn, hx + hside * besideDist(kn, hk, 0.62), start, Math.max(0.5, dur - 0.6), "walk");
+                fx(c.layer, "lean", start + dur - 0.6, start + dur + 1.2, { angle: hside < 0 ? 8 : -8, ramp: 0.3 });
+                fx(chars[hk].layer, "lean", start + dur - 0.4, start + dur + 1.2, { angle: hside < 0 ? -6 : 6, ramp: 0.3 });
+              } else fx(c.layer, "lean", start, start + dur, { angle: 6, ramp: 0.3 });
+              break;
+            }
+            case "back": ensurePresent(kn, start); moveTo(kn, curX(kn, start) - (c.facing >= 0 ? 1 : -1) * W * 0.1, start, dur, "walk"); setFacing(kn, c.facing >= 0 ? 1 : -1, start + dur); break;
+            case "clap": ensurePresent(kn, start); fx(c.layer, "pulse", start, start + dur, { strength: 10, speed: 3 }); break;
+            case "sing": { ensurePresent(kn, start); fx(c.layer, "talk", start, start + dur, { strength: Math.round(5 * k), speed: 3 }); fx(c.layer, "float", start, start + dur, { strength: Math.round(6 * k), speed: 0.8, tilt: 4 }); thought(kn, "♪ ♫", start, start + dur); break; }
+            case "slide": { ensurePresent(kn, start); var sdx = (a.to === "left" ? -1 : a.to === "right" ? 1 : (c.facing >= 0 ? 1 : -1)) * W * 0.3; var sfrom = curX(kn, start), sto = Math.max(W * 0.06, Math.min(W * 0.94, sfrom + sdx)); setFacing(kn, sto > sfrom ? 1 : -1, start); key(c.layer, "x", start, sfrom, "easeOutCubic"); key(c.layer, "x", start + dur, sto, "easeOutCubic"); fx(c.layer, "lean", start, start + dur, { angle: sto > sfrom ? -10 : 10, ramp: 0.2 }); c.x = sto; break; }
+            case "swim": { ensurePresent(kn, start); fx(c.layer, "float", start, start + dur, { strength: Math.round(8 * k), speed: 1.2, tilt: 6 }); moveTo(kn, curX(kn, start) + (a.to === "left" ? -1 : 1) * W * 0.2, start, dur, "walk"); break; }
+            case "yawn": ensurePresent(kn, start); fx(c.layer, "lean", start, start + dur, { angle: -6, ramp: 0.5 }); fx(c.layer, "breathe", start, start + dur, { strength: 6, speed: 1 / dur }); break;
+            case "throw": ensurePresent(kn, start); fx(c.layer, "swing", start, start + dur, { strength: 12, speed: 1 / dur }); fx(c.layer, "lean", start, start + dur, { angle: c.facing >= 0 ? 8 : -8, ramp: 0.2 }); break;
+            case "catch": ensurePresent(kn, start); fx(c.layer, "jelly", start, start + dur, { strength: 14, speed: 3 }); break;
             case "think": { ensurePresent(kn, start); fx(c.layer, "lean", start, start + dur, { angle: 3, ramp: 0.4 }); thought(kn, "…", start, start + dur); break; }
             case "look": { ensurePresent(kn, start); var lk = a.target ? norm(a.target) : null; if (lk && chars[lk] && chars[lk].present) setFacing(kn, curX(lk, start) > curX(kn, start) ? 1 : -1, start); else if (a.to === "left" || a.to === "right") setFacing(kn, a.to === "left" ? -1 : 1, start); break; }
             case "grow": case "shrink": { L = ensurePresent(kn, start); var f = a.act === "grow" ? 1.35 : 0.7, sx0 = M.trackValue(L.tracks.sx, start, L.base.sx), sy0 = M.trackValue(L.tracks.sy, start, L.base.sy);
@@ -695,6 +767,8 @@
         if (!a.simultaneous) t = start + dur + (a.act === "wait" ? 0 : 0.15);
       });
       sc.duration = Math.round((t + 0.9) * project.fps) / project.fps;
+      M.setKey(bgL.tracks.sx, 0, bgL.base.sx, "linear"); M.setKey(bgL.tracks.sy, 0, bgL.base.sy, "linear");
+      M.setKey(bgL.tracks.sx, sc.duration, pushIn ? cover * 1.05 : cover, "linear"); M.setKey(bgL.tracks.sy, sc.duration, pushIn ? cover * 1.05 : cover, "linear");
       fade(sc);
       scenes.push(sc);
     });
@@ -703,7 +777,7 @@
       var es = Model.newScene("Son", 2.4);
       es.background = { type: "gradient", color: "#0b1020", color2: "#000000", angle: 180, assetId: null };
       var son = textLayer("SON", "SON", { base: { x: W / 2, y: H / 2, rot: 0, sx: 1, sy: 1, opacity: 1 },
-        text: { size: Math.round(H * 0.18), font: fonts[2].id, color: "#ffffff", stroke: "#7b2fff", strokeWidth: Math.round(6 * k), bubble: false, maxWidth: W } });
+        text: { size: Math.round(base * 0.18), font: fonts[2].id, color: "#ffffff", stroke: "#7b2fff", strokeWidth: Math.round(6 * k), bubble: false, maxWidth: W } });
       fx(son, "zoomIn", 0, 0.8);
       es.layers.push(son);
       scenes.push(es);
