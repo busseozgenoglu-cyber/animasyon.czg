@@ -108,9 +108,13 @@
       extraList.appendChild(h("button", { type: "button", class: "small", onclick: function () { App().pickCastImages(c.id); } }, "+ Resim"));
       var details = h("details", { class: "wz-more" }, h("summary", null, "Ek resimler" + (extra.length ? " (" + extra.length + ")" : "") + " · ağız, adım, duygu"),
         h("p", { class: "hint" }, "İsteğe bağlı: ağzı açık bir kare eklersen konuşurken ağzı oynar; adım kareleri eklersen yürürken bacakları hareket eder; mutlu/üzgün/kızgın resimleri o duygudaki repliklerde kullanılır."), extraList);
-      box.appendChild(h("div", { class: "wz-card" }, drop, name, h("div", { class: "wz-card-foot" }, facing, root.UI.sizeSelect(c, function () { App().commit(); }, "wz-facing"),
-        h("button", { type: "button", class: "small danger", title: "Karakteri sil", onclick: function () { if (c.images.length && !confirm("“" + c.name + "” silinsin mi?")) return; App().removeCastMember(c.id); renderCast(); renderSummary(); } }, "Sil")), details));
+      var footKids = ["div", { class: "wz-card-foot" }, facing, root.UI.sizeSelect(c, function () { App().commit(); }, "wz-facing")];
+      var voiceSel = root.Voice ? root.Voice.voiceSelect(c, function () { App().commit(); }, "wz-facing") : null;
+      if (voiceSel) footKids.push(voiceSel);
+      footKids.push(h("button", { type: "button", class: "small danger", title: "Karakteri sil", onclick: function () { if (c.images.length && !confirm("“" + c.name + "” silinsin mi?")) return; App().removeCastMember(c.id); renderCast(); renderSummary(); } }, "Sil"));
+      box.appendChild(h("div", { class: "wz-card" }, drop, name, h.apply(null, footKids), details));
     });
+    if (root.Voice && $("wzVoice")) root.Voice.renderPanel($("wzVoice"), { onChange: function () { renderCast(); renderSummary(); } });
     box.appendChild(h("button", { type: "button", class: "wz-card add", onclick: function () {
       var m = App().addCastMember("Karakter " + (sc.cast.length + 1));
       App().pickCastImages(m.id);            // dosya seçici kullanıcı dokunuşuyla aynı anda açılır (Safari gerektirir)
@@ -201,6 +205,10 @@
       st.candidates.forEach(function (nm) { cand.appendChild(h("button", { type: "button", class: "chip ph", style: "cursor:pointer", title: "Karakter olarak ekle", onclick: function () { App().addCastMember(nm); renderSummary(); } }, "+ " + nm)); });
       box.appendChild(cand);
     }
+    if (sc.voice && sc.voice.enabled && root.Voice) {
+      var vs = root.Voice.state, have = Object.keys(project().clips || {}).length, need = D.voiceLines(project()).length;
+      box.appendChild(h("div", { class: "wz-sumline vo-sum" }, "🎙️ Seslendirme açık · " + (vs.status === "ok" ? "SesKlon bağlı" : vs.status === "checking" ? "bağlanılıyor…" : "SesKlon'a bağlı değil (1. adımdan Bağlan)") + " · " + need + " parça" + (have ? ", " + have + " hazır" : "")));
+    }
     var warns = [];
     st.unknownActions.slice(0, 5).forEach(function (a) { warns.push("“" + a + "” anlaşılmadı; bekleme olarak işlenir. Eylem düğmelerindeki kalıpları kullan."); });
     if (!st.lines && !st.actions) warns.push("Henüz replik ya da eylem yok.");
@@ -231,7 +239,8 @@
   function renderFilmInfo() {
     var p = project(), total = root.Exporter.totalDuration(p), layers = p.scenes.reduce(function (s, x) { return s + x.layers.length; }, 0);
     $("wzFilmTitle").textContent = Easy.built ? "“" + p.name + "” hazır!" : "Film";
-    $("wzFilmInfo").textContent = p.scenes.length + " sahne · " + fmtSec(total) + " · " + layers + " katman. İzle, beğenmediğin yeri senaryoda değiştirip yeniden üret; sonra indir." + (total > 20 ? " Bu uzunlukta GIF büyük olur; video (MP4/WebM) öneririz." : "");
+    var voiced = Easy.stats && Easy.stats.voiced ? " · 🎙️ " + Easy.stats.voiced + " parça seslendirildi" : "";
+    $("wzFilmInfo").textContent = p.scenes.length + " sahne · " + fmtSec(total) + " · " + layers + " katman" + voiced + ". İzle, beğenmediğin yeri senaryoda değiştirip yeniden üret; sonra indir." + (total > 20 ? " Bu uzunlukta GIF büyük olur; video (MP4/WebM) öneririz." : "");
     var notes = $("wzNotes"); notes.innerHTML = "";
     if (Easy.warnings.length) notes.appendChild(h("details", { class: "wz-details" }, h("summary", null, Easy.warnings.length + " not"), h("ul", { class: "warn" }, Easy.warnings.map(function (w) { return h("li", null, w); }))));
     root.Exporter.detectSupport(p).then(function (sup) {
@@ -293,18 +302,24 @@
     return App().addLibraryCast(want).then(function (added) { renderCast(); renderSummary(); return added; });
   };
 
-  /* Üretim */
+  /* Üretim (seslendirme sürerken düğme “durdur” olur: eldeki kliplerle film kurulur) */
+  var buildCtl = null;
   Easy.build = function () {
     var btn = $("wzBuild");
+    if (buildCtl) { buildCtl.abort(); btn.textContent = "Durduruluyor…"; return; }
     script().text = $("wzText").value;
     if (!script().text.trim()) { renderSummary(); $("wzText").focus(); return; }
-    btn.disabled = true; btn.textContent = "Üretiliyor…";
-    App().buildFromScript({ autoplay: false }).then(function (res) {
-      btn.disabled = false; btn.textContent = "🎬 Filmi üret";
+    btn.textContent = "Üretiliyor…";
+    buildCtl = new AbortController();
+    App().buildFromScript({ autoplay: false, signal: buildCtl.signal, onProgress: function (pr) {
+      if (pr.phase === "Seslendiriliyor") btn.textContent = "⏹ Seslendiriliyor " + Math.min(pr.done + 1, pr.total) + "/" + pr.total + (pr.eta ? " · ~" + Math.round(pr.eta) + " sn" : "") + " — durdur";
+      else btn.textContent = pr.phase + "…";
+    } }).then(function (res) {
+      buildCtl = null; btn.disabled = false; btn.textContent = "🎬 Filmi üret";
       Easy.built = true; Easy.warnings = res.warnings; Easy.stats = res.stats;
       Easy.goto(3);
     }).catch(function (err) {
-      btn.disabled = false; btn.textContent = "🎬 Filmi üret";
+      buildCtl = null; btn.disabled = false; btn.textContent = "🎬 Filmi üret";
       var box = $("wzSummary"); box.insertBefore(h("div", { class: "err" }, "Üretilemedi: " + (err && err.message || err)), box.firstChild);
     });
   };
@@ -322,13 +337,13 @@
     function onProgress(pr) { var pct = pr.total ? Math.round(pr.done / pr.total * 100) : 0; bar.style.width = pct + "%"; txt.textContent = pr.phase + " · %" + pct; }
     // GIF: paylaşıma uygun küçük boyut (en fazla 480 px genişlik, 12 fps, titremesiz); uzun filmlerde video önerilir
     if (fmt === "gif") job = X.exportGif(p, { fps: 12, scale: Math.min(1, 480 / p.width), dither: false, range: "all" }, onProgress, exportCtl).then(function (b) { return { blob: b, name: base + ".gif" }; });
-    else job = X.exportVideo(p, { format: fmt, scale: 1, quality: "mid", range: "all" }, onProgress, exportCtl).then(function (r) { return { blob: r.blob, name: base + "." + r.ext }; });
+    else job = X.exportVideo(p, { format: fmt, scale: 1, quality: "mid", range: "all" }, onProgress, exportCtl).then(function (r) { return { blob: r.blob, name: base + "." + r.ext, note: r.note }; });
     job.then(function (out) {
       prog.hidden = true;
       X.download(out.blob, out.name);
       var url = URL.createObjectURL(out.blob);
       res.appendChild(h("div", { class: "wz-done" }, "✅ İndirildi: ", h("b", null, out.name), " (" + fmtBytes(out.blob.size) + "). ",
-        h("a", { href: url, download: out.name }, "Tekrar indir")));
+        h("a", { href: url, download: out.name }, "Tekrar indir"), out.note ? h("div", { class: "hint" }, out.note) : ""));
       renderFilmInfo();
     }).catch(function (err) {
       prog.hidden = true;

@@ -215,7 +215,13 @@
       return webcodecsSupport(project).then(function (codec) {
         // Ses (müzik ya da efekt) varsa ve tarayıcı sesli MP4 kaydedebiliyorsa gerçek zamanlı kayıt; yoksa hızlı WebCodecs yolu
         var hasAudio = !!project.audio || (root.Sfx && root.Sfx.cues(project, 0, Infinity).length > 0);
-        if (codec && !(hasAudio && sup.mp4)) return exportMp4WebCodecs(project, opts, onProgress, ctl);
+        if (codec && !(hasAudio && sup.mp4)) {
+          // Sesli film ama bu tarayıcı sesli MP4 kaydedemiyor: sessiz MP4 yerine sesli WebM üretilir (uzantı sonuçta bildirilir)
+          if (hasAudio && sup.webm) return exportVideoRecorder(project, Object.assign({}, opts, { format: "webm" }), onProgress, ctl).then(function (r) {
+            r.note = "Bu tarayıcı sesli MP4 kaydedemiyor; film sesiyle birlikte WebM olarak verildi."; return r;
+          });
+          return exportMp4WebCodecs(project, opts, onProgress, ctl);
+        }
         if (sup.mp4) return exportVideoRecorder(project, opts, onProgress, ctl);
         throw new Error("Bu tarayıcı MP4 (H.264) üretemiyor. WebM seçin ya da Chrome/Edge/Safari kullanın.");
       });
@@ -235,7 +241,8 @@
     var bitrate = Math.round(mbps * 1e6 * (canvas.width * canvas.height) / (1280 * 720));
     bitrate = Math.max(800000, Math.min(50e6, bitrate));
 
-    return Render.ensureAssets(project).then(function () {
+    var prepared = root.Sfx && root.Sfx.prepare ? root.Sfx.prepare(project).catch(function () { return 0; }) : Promise.resolve(0);
+    return prepared.then(function () { return Render.ensureAssets(project); }).then(function () {
       return new Promise(function (resolve, reject) {
         var stream = canvas.captureStream(0);
         var track = stream.getVideoTracks()[0];
@@ -302,7 +309,7 @@
                 if (offset < source.buffer.duration) source.start(when, offset, Math.min(dur, source.buffer.duration - offset));
               } catch (e) { /* ses olmadan devam */ }
             }
-            if (sfxCues.length && sfxDest) { try { root.Sfx.schedule(audioCtx, sfxDest, sfxCues, r.start, when, 0.45); } catch (e) { /* efektsiz devam */ } }
+            if (sfxCues.length && sfxDest) { try { root.Sfx.schedule(audioCtx, sfxDest, sfxCues, r.start, when, 0.45, 1); } catch (e) { /* efektsiz devam */ } }
           }
           var i = 0;
           function loop() {

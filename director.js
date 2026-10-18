@@ -223,6 +223,38 @@
     return titleCase(first);
   }
 
+  /* Film ölçüleri: karakter boyu, balon yazısı ve balon başına karakter sayısı (sahne kurucu ve seslendirme aynı değerleri kullanır) */
+  function metrics(project) {
+    var W = project.width, H = project.height, settings = (project.script && project.script.settings) || {};
+    var base = Math.min(H, W * 1.1), k = base / 720;
+    var charH = (settings.charHeight || 0.42) * base;
+    var bubbleFont = Math.round(base * 0.042), bubbleMaxW = Math.round(W * (W < H ? 0.72 : W === H ? 0.5 : 0.36));
+    var bubbleChars = Math.max(40, Math.round(bubbleMaxW / (bubbleFont * 0.5)) * 3);   // balon başına en çok ~3 satır
+    return { base: base, k: k, charH: charH, bubbleFont: bubbleFont, bubbleMaxW: bubbleMaxW, bubbleChars: bubbleChars };
+  }
+  /* Seslendirme anahtarı: aynı ses + stil + duygu + metin → aynı klip (yeniden üretimde tekrar seslendirilmez) */
+  function voiceKey(voiceId, style, emotion, text) {
+    return "vo" + hash([voiceId || "", style || "", emotion || "", String(text || "").trim()].join("\u0001")).toString(36);
+  }
+  /* Seslendirilecek satırlar: senaryodaki replik ve anlatım parçaları (balon bölünmesiyle birebir aynı) */
+  function voiceLines(project) {
+    var script = project.script || {}, vo = script.voice || {}, m = metrics(project), ast = parse(script.text || "");
+    var byName = {}, out = [], seen = {};
+    (script.cast || []).forEach(function (c) { byName[norm(c.name)] = c; });
+    function push(e) { e.key = voiceKey(e.voiceId, e.style, e.emotion, e.text); if (seen[e.key]) return; seen[e.key] = 1; out.push(e); }
+    ast.scenes.forEach(function (sa) {
+      sa.items.forEach(function (it) {
+        if (it.type === "dialogue") {
+          var c = byName[norm(it.who)], emo = emotionOf(it.emotion);
+          splitLine(it.text, m.bubbleChars).forEach(function (ch) { push({ kind: "dialogue", who: it.who, text: ch, emotion: emo, voiceId: (c && c.voiceId) || "", style: vo.style || "sohbet" }); });
+        } else if (it.type === "narration") {
+          splitLine(it.text, m.bubbleChars).forEach(function (ch) { push({ kind: "narration", who: "Anlatıcı", text: ch, emotion: "", voiceId: vo.narratorVoiceId || "", style: vo.narratorStyle || "anlatıcı" }); });
+        }
+      });
+    });
+    return out;
+  }
+
   /* Replikleri balon boyutuna göre parçalara böler */
   function splitLine(text, maxChars) {
     text = String(text).trim();
@@ -366,7 +398,17 @@
     var Model = root.Model, M = root.Motion, R = root.Render;
     var script = project.script, settings = script.settings || {};
     var W = project.width, H = project.height;
-    var base = Math.min(H, W * 1.1), k = base / 720;   // dikey/kare filmde ölçüler genişliğe göre küçülür
+    var mm = metrics(project), base = mm.base, k = mm.k;   // dikey/kare filmde ölçüler genişliğe göre küçülür
+    var voiceOn = !!(script.voice && script.voice.enabled), clips = project.clips || {}, clipsUsed = {};
+    var voStyle = (script.voice && script.voice.style) || "sohbet", voNarStyle = (script.voice && script.voice.narratorStyle) || "anlatıcı";
+    var narratorVoice = (script.voice && script.voice.narratorVoiceId) || "";
+    function clipFor(voiceId, style, emotion, text) {
+      if (!voiceOn) return null;
+      var key = voiceKey(voiceId || "", style, emotion || "", text), c = clips[key];
+      if (!c || !(c.duration > 0)) return null;
+      clipsUsed[key] = true;
+      return { key: key, duration: c.duration };
+    }
     var res = analyze(script.text, script.cast.map(function (c) { return c.name; }));
     var ast = res.ast, warnings = [], stats = res.stats;
     if (!ast.scenes.length || !ast.scenes.some(function (s) { return s.items.length; })) throw new Error("Senaryoda sahne ya da replik bulunamadı. Örnek senaryoya bakın.");
@@ -388,19 +430,19 @@
 
     /* Karakter tablosu: görseller, yüz yönü */
     var cast = {}, castUsed = {};
-    function castDef(name, imgs, facing, size) {
+    function castDef(name, imgs, facing, size, voiceId) {
       var byRole = {};
       imgs.forEach(function (im) { (byRole[im.role || "pose"] = byRole[im.role || "pose"] || []).push(im.assetId); });
       var pose = (byRole.pose || [])[0] || imgs[0].assetId;
       return { name: name, pose: pose, talk: byRole.talk || [], walk: byRole.walk || [], blink: byRole.blink || [], emotions: {
         mutlu: (byRole.mutlu || [])[0], uzgun: (byRole.uzgun || [])[0], kizgin: (byRole.kizgin || [])[0], saskin: (byRole.saskin || [])[0], korkmus: (byRole.korkmus || [])[0] },
-        facing: facing === "left" ? -1 : 1, size: (size > 0 ? size : 1) };
+        facing: facing === "left" ? -1 : 1, size: (size > 0 ? size : 1), voiceId: voiceId || "" };
     }
     script.cast.forEach(function (c) {
       var imgs = (c.images || []).filter(function (im) { return project.assets[im.assetId]; });
       imgs.forEach(function (im) { castUsed[im.assetId] = true; });
       if (!imgs.length) return;
-      cast[norm(c.name)] = castDef(c.name, imgs, c.facing, c.size);
+      cast[norm(c.name)] = castDef(c.name, imgs, c.facing, c.size, c.voiceId);
     });
     /* Görseli olmayan karakterler: kütüphaneden (ada göre eşleşen ya da isim etiketli rastgele) çizilir; kütüphane yoksa yer tutucu */
     var Lib = root.Characters;
@@ -411,7 +453,8 @@
         try {
           var entry = Lib.findByName(nm) || Lib.random(nm), gen = Lib.generate(project, entry, nm);
           gen.images.forEach(function (im) { genUsed[im.assetId] = true; });
-          made = castDef(nm, gen.images, gen.facing, gen.size);
+          var own = script.cast.filter(function (c) { return norm(c.name) === norm(nm); })[0];
+          made = castDef(nm, gen.images, gen.facing, gen.size, own && own.voiceId);
           made.placeholder = !!entry.label;   // isim etiketli karakter aynalanmaz
           warnings.push("“" + nm + "” için görsel yüklenmedi; kütüphaneden " + (entry.label ? "isim etiketli bir karakter" : "“" + entry.name + "”") + " çizildi.");
         } catch (e) { made = null; }
@@ -420,7 +463,8 @@
         var pose = genAsset("ph:" + norm(nm) + ":pose", nm + " (yer tutucu).png", function () { return drawPlaceholder(nm, "pose"); });
         var talk = genAsset("ph:" + norm(nm) + ":talk", nm + " (konuşma).png", function () { return drawPlaceholder(nm, "talk"); });
         var walk = genAsset("ph:" + norm(nm) + ":walk", nm + " (yürüme).png", function () { return drawPlaceholder(nm, "walk"); });
-        made = { name: nm, pose: pose, talk: [talk], walk: [walk], blink: [], emotions: {}, facing: 1, placeholder: true, size: 1 };
+        var own2 = script.cast.filter(function (c) { return norm(c.name) === norm(nm); })[0];
+        made = { name: nm, pose: pose, talk: [talk], walk: [walk], blink: [], emotions: {}, facing: 1, placeholder: true, size: 1, voiceId: (own2 && own2.voiceId) || "" };
         warnings.push("“" + nm + "” için görsel yüklenmedi; renkli bir yer tutucu karakter çizildi.");
       }
       cast[norm(nm)] = made;
@@ -441,9 +485,8 @@
       return best;
     }
 
-    var speed = settings.speed || "normal", charH = (settings.charHeight || 0.42) * base, groundY = Math.round(H * 0.9);
-    var bubbleFont = Math.round(base * 0.042), bubbleMaxW = Math.round(W * (W < H ? 0.72 : W === H ? 0.5 : 0.36));
-    var bubbleChars = Math.max(40, Math.round(bubbleMaxW / (bubbleFont * 0.5)) * 3);   // balon başına en çok ~3 satır
+    var speed = settings.speed || "normal", charH = mm.charH, groundY = Math.round(H * 0.9);
+    var bubbleFont = mm.bubbleFont, bubbleMaxW = mm.bubbleMaxW, bubbleChars = mm.bubbleChars;
     var fonts = Model.FONTS;
     var scenes = [];
 
@@ -579,7 +622,12 @@
       }
       function curX(kn, t) { var c = chars[kn]; if (!c.layer) return c.x; return M.trackValue(c.layer.tracks.x, t, c.layer.base.x); }
       /* Ses ipucu (sahne zamanı) */
-      function cue(type, at) { if (settings.sfx === false) return; sc.sfx.push({ t: Math.max(0, Math.round(at * 1000) / 1000), type: type }); }
+      function cue(type, at, clip) {
+        if (type !== "clip" && settings.sfx === false) return;
+        var q = { t: Math.max(0, Math.round(at * 1000) / 1000), type: type };
+        if (clip) q.clip = clip;
+        sc.sfx.push(q);
+      }
       /* Kamera anahtarı: ilk anahtar sahne başında temel değeri sabitler */
       function camKey(prop, at, v) { var tr = sc.camera.tracks[prop]; if (!tr.length && at > 1e-6) M.setKey(tr, 0, sc.camera.base[prop], "easeInOutQuad"); M.setKey(tr, at, v, "easeInOutQuad"); }
       function cameraAct(a, start, dur, lastSpeaker) {
@@ -688,7 +736,12 @@
         if (it.type === "dialogue" || it.type === "narration") {
           var chunks = splitLine(it.text, bubbleChars);
           if (it.type === "narration") {
-            chunks.forEach(function (ch) { var d = lineDuration(ch, speed); caption(ch, t, t + d); t += d + 0.3; });
+            chunks.forEach(function (ch) {
+              var nclip = clipFor(narratorVoice, voNarStyle, "", ch), d = nclip ? Math.max(1.2, nclip.duration + 0.45) : lineDuration(ch, speed);
+              caption(ch, t, t + d);
+              if (nclip) cue("clip", t + 0.1, nclip.key);
+              t += d + 0.3;
+            });
             return;
           }
           var kn = norm(it.who);
@@ -703,9 +756,11 @@
           }
           if (lastSpeaker && lastSpeaker !== kn && chars[lastSpeaker].present && chars[lastSpeaker].layer) fx(chars[lastSpeaker].layer, "swing", t, t + 0.7, { strength: 2, speed: 1.4 });   // dinleyen hafifçe başını sallar
           chunks.forEach(function (ch) {
-            var d = lineDuration(ch, speed) * (emotion === "fisilti" ? 1.15 : 1);
+            var clip = clipFor(chars[kn].def.voiceId, voStyle, emotion, ch);
+            var d = clip ? Math.max(1.2, clip.duration + 0.5) : lineDuration(ch, speed) * (emotion === "fisilti" ? 1.15 : 1);
             bubble(kn, ch, t, t + d, emotion);
-            talk(kn, t + 0.1, t + d - 0.2, emotion);
+            if (clip) { cue("clip", t + 0.1, clip.key); talk(kn, t + 0.1, t + 0.1 + clip.duration, emotion); }
+            else talk(kn, t + 0.1, t + d - 0.2, emotion);
             if (!emotion) {
               if (/!\s*$/.test(ch)) fx(chars[kn].layer, "bounce", t, t + 0.7, { strength: Math.round(base * 0.018), speed: 1.4, squash: 12 });
               else if (/\?\s*$/.test(ch)) fx(chars[kn].layer, "lean", t, t + d, { angle: 3, ramp: 0.4 });
@@ -899,10 +954,12 @@
     if (!scenes.length) throw new Error("Üretilecek sahne yok.");
     // Son sahnenin geçişi yok
     scenes[scenes.length - 1].transition = { type: "none", duration: 0.5 };
+    // Artık kullanılmayan seslendirme kliplerini temizle (seslendirme açıkken; kapalıyken klipler saklanır)
+    if (voiceOn && project.clips) Object.keys(project.clips).forEach(function (kk) { if (!clipsUsed[kk]) delete project.clips[kk]; });
     // Artık kullanılmayan üretilmiş görselleri temizle
     Object.keys(project.assets).forEach(function (id) { var a = project.assets[id]; if (a.genKey && !genUsed[id] && !castUsed[id]) delete project.assets[id]; });
     var total = scenes.reduce(function (s, x) { return s + x.duration; }, 0);
-    return { scenes: scenes, warnings: warnings, stats: { scenes: scenes.length, lines: stats.lines, actions: stats.actions, narrations: stats.narrations, seconds: total, layers: scenes.reduce(function (s, x) { return s + x.layers.length; }, 0) } };
+    return { scenes: scenes, warnings: warnings, stats: { scenes: scenes.length, lines: stats.lines, actions: stats.actions, narrations: stats.narrations, seconds: total, layers: scenes.reduce(function (s, x) { return s + x.layers.length; }, 0), voiced: Object.keys(clipsUsed).length } };
   }
 
   var SAMPLE = [
@@ -952,5 +1009,5 @@
   ].join("\n");
 
   return { parse: parse, analyze: analyze, analyzeAction: analyzeAction, splitLine: splitLine, lineDuration: lineDuration, emotionOf: emotionOf,
-    placeKind: placeKind, build: build, SAMPLE: SAMPLE, HELP: HELP, norm: norm, titleCase: titleCase };
+    placeKind: placeKind, build: build, metrics: metrics, voiceKey: voiceKey, voiceLines: voiceLines, SAMPLE: SAMPLE, HELP: HELP, norm: norm, titleCase: titleCase };
 });

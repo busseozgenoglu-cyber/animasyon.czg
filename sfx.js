@@ -32,37 +32,104 @@
     sparkle: function (c, d, at, n) { for (var i = 0; i < 4; i++) tone(c, d, at + i * 0.07, "sine", 1200 + i * 300, 1600 + i * 300, 0.18, 0.08, n); }
   };
 
-  /* Projedeki tüm ipuçları küresel zamanla ([start, end) aralığı) */
+  /* Projedeki tüm ipuçları küresel zamanla ([start, end) aralığı); seslendirme klipleri aralıkla örtüşüyorsa dahil edilir */
   function cues(project, start, end) {
-    var out = [], acc = 0;
+    var out = [], acc = 0, s0 = start || 0, e0 = end == null ? Infinity : end, clips = project.clips || {};
     (project.scenes || []).forEach(function (sc) {
-      (sc.sfx || []).forEach(function (q) { var T = acc + q.t; if (T >= (start || 0) - 1e-6 && T < (end == null ? Infinity : end) && SYN[q.type]) out.push({ t: T, type: q.type }); });
+      (sc.sfx || []).forEach(function (q) {
+        var T = acc + q.t;
+        if (q.type === "clip") {
+          var c = clips[q.clip];
+          if (c && c.duration > 0 && T + c.duration > s0 + 1e-6 && T < e0) out.push({ t: T, type: "clip", clip: q.clip, dur: c.duration });
+          return;
+        }
+        if (T >= s0 - 1e-6 && T < e0 && SYN[q.type]) out.push({ t: T, type: q.type });
+      });
       acc += sc.duration;
     });
     out.sort(function (a, b) { return a.t - b.t; });
     return out;
   }
-  /* İpuçlarını zamanlar: fromT küresel zamanı ctx'in `when` anına denk gelir. Durdurma işlevi döner. */
-  function schedule(ctx, dest, list, fromT, when, gainValue) {
+
+  /* ── Seslendirme klipleri: dataUrl → AudioBuffer önbelleği ── */
+  var clipCache = new Map(), decodeCtx = null;
+  function dataUrlToArrayBuffer(dataUrl) {
+    var b64 = dataUrl.slice(dataUrl.indexOf(",") + 1), bin = atob(b64), arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return arr.buffer;
+  }
+  function decoder() {
+    if (live.ctx) return live.ctx;
+    if (!decodeCtx) decodeCtx = new AudioContext();
+    return decodeCtx;
+  }
+  /* Sahnelerde geçen klipleri çözer (bir kez); çalma ve dışa aktarma öncesi çağrılır */
+  function prepare(project) {
+    var need = {}, clips = project.clips || {};
+    (project.scenes || []).forEach(function (sc) { (sc.sfx || []).forEach(function (q) { if (q.type === "clip" && clips[q.clip] && !(clipCache.get(q.clip) instanceof AudioBuffer)) need[q.clip] = 1; }); });
+    var keys = Object.keys(need);
+    if (!keys.length || typeof AudioContext === "undefined") return Promise.resolve(0);
+    var ctx;
+    try { ctx = decoder(); } catch (e) { return Promise.resolve(0); }
+    return Promise.all(keys.map(function (key) {
+      var pending = clipCache.get(key);
+      if (pending && typeof pending.then === "function") return pending;
+      var p = new Promise(function (resolve) {
+        try {
+          var ab = dataUrlToArrayBuffer(clips[key].dataUrl);
+          var r = ctx.decodeAudioData(ab, function (buf) { clipCache.set(key, buf); resolve(buf); }, function () { clipCache.delete(key); resolve(null); });
+          if (r && typeof r.then === "function") r.then(function (buf) { clipCache.set(key, buf); resolve(buf); }, function () { clipCache.delete(key); resolve(null); });
+        } catch (e) { clipCache.delete(key); resolve(null); }
+      });
+      clipCache.set(key, p);
+      return p;
+    })).then(function (bufs) { return bufs.filter(Boolean).length; });
+  }
+  function hasPendingClips(project) {
+    var clips = project.clips || {};
+    return (project.scenes || []).some(function (sc) { return (sc.sfx || []).some(function (q) { return q.type === "clip" && clips[q.clip] && !(clipCache.get(q.clip) instanceof AudioBuffer); }); });
+  }
+
+  /* İpuçlarını zamanlar: fromT küresel zamanı ctx'in `when` anına denk gelir. Durdurma işlevi döner.
+     Klipler ayrı kazançla (konuşma seviyesi) çalar; aralığın ortasından başlıyorsa kaydırılarak başlatılır. */
+  function schedule(ctx, dest, list, fromT, when, gainValue, voiceGain) {
     var g = ctx.createGain(); g.gain.value = gainValue == null ? 0.5 : gainValue; g.connect(dest);
+    var vg = ctx.createGain(); vg.gain.value = voiceGain == null ? 1 : voiceGain; vg.connect(dest);
     var nodes = [];
-    list.forEach(function (q) { if (q.t < fromT - 0.02) return; SYN[q.type](ctx, g, when + (q.t - fromT), nodes); });
-    return function stop() { nodes.forEach(function (nd) { try { nd.stop(); } catch (e) { /* başlamamış olabilir */ } }); try { g.disconnect(); } catch (e) { /* yoksay */ } };
+    list.forEach(function (q) {
+      if (q.type === "clip") {
+        var buf = clipCache.get(q.clip);
+        if (!(buf instanceof AudioBuffer)) return;
+        var offset = Math.max(0, fromT - q.t);
+        if (offset >= buf.duration - 0.02) return;
+        var s = ctx.createBufferSource(); s.buffer = buf; s.connect(vg);
+        try { s.start(when + Math.max(0, q.t - fromT), offset); nodes.push(s); } catch (e) { /* yoksay */ }
+        return;
+      }
+      if (q.t < fromT - 0.02) return;
+      SYN[q.type](ctx, g, when + (q.t - fromT), nodes);
+    });
+    return function stop() { nodes.forEach(function (nd) { try { nd.stop(); } catch (e) { /* başlamamış olabilir */ } }); try { g.disconnect(); vg.disconnect(); } catch (e) { /* yoksay */ } };
   }
   /* Canlı önizleme (stüdyo ve kolay mod): tarayıcı sesine çalar */
-  var live = { ctx: null, stopFn: null, enabled: true,
+  var live = { ctx: null, stopFn: null, enabled: true, token: 0,
     play: function (project, fromT) {
       live.stop();
       if (!live.enabled || typeof AudioContext === "undefined") return;
-      var list = cues(project, fromT, Infinity);
-      if (!list.length) return;
+      if (!cues(project, fromT, Infinity).length) return;
       try {
         live.ctx = live.ctx || new AudioContext();
         if (live.ctx.state === "suspended") live.ctx.resume();
-        live.stopFn = schedule(live.ctx, live.ctx.destination, list, fromT, live.ctx.currentTime + 0.03, 0.45);
-      } catch (e) { /* ses yoksa sessiz devam */ }
+      } catch (e) { return; }
+      var token = ++live.token, wall = performance.now();
+      function go() {
+        if (token !== live.token) return;
+        var from = fromT + (performance.now() - wall) / 1000, list = cues(project, from, Infinity);
+        try { live.stopFn = schedule(live.ctx, live.ctx.destination, list, from, live.ctx.currentTime + 0.03, 0.45, 1); } catch (e) { /* sessiz devam */ }
+      }
+      if (hasPendingClips(project)) prepare(project).then(go, go); else go();
     },
-    stop: function () { if (live.stopFn) { live.stopFn(); live.stopFn = null; } }
+    stop: function () { live.token++; if (live.stopFn) { live.stopFn(); live.stopFn = null; } }
   };
-  root.Sfx = { TYPES: Object.keys(SYN), cues: cues, schedule: schedule, live: live };
+  root.Sfx = { TYPES: Object.keys(SYN), cues: cues, schedule: schedule, prepare: prepare, live: live };
 })(window);

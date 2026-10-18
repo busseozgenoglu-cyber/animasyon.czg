@@ -646,7 +646,7 @@
     var base = "canlandir-" + X.safeName(p.name), job;
     if (f === "gif") job = X.exportGif(p, { fps: parseInt($("exFps").value, 10), scale: scale, dither: $("exDither").checked, range: range }, onProgress, exportCtl).then(function (b) { return { blob: b, name: base + ".gif", kind: "img" }; });
     else if (f === "png") job = X.exportPngZip(p, { scale: scale, range: range }, onProgress, exportCtl).then(function (b) { return { blob: b, name: base + "-kareler.zip", kind: "file" }; });
-    else job = X.exportVideo(p, { format: f, scale: scale, quality: $("exQuality").value, range: range }, onProgress, exportCtl).then(function (r) { return { blob: r.blob, name: base + "." + r.ext, kind: "video" }; });
+    else job = X.exportVideo(p, { format: f, scale: scale, quality: $("exQuality").value, range: range }, onProgress, exportCtl).then(function (r) { return { blob: r.blob, name: base + "." + r.ext, kind: "video", note: r.note }; });
     job.then(function (out) {
       prog.hidden = true; $("exStart").disabled = false; $("exCancel").hidden = true;
       var url = URL.createObjectURL(out.blob);
@@ -657,6 +657,7 @@
       res.hidden = false;
       X.download(out.blob, out.name);
       App.toast(out.name + " indirildi (" + fmtBytes(out.blob.size) + ")", "ok");
+      if (out.note) { $("exNote").textContent = out.note; App.toast(out.note); }
     }).catch(function (err) {
       prog.hidden = true; $("exStart").disabled = false; $("exCancel").hidden = true;
       var msg = err && err.message || String(err);
@@ -760,6 +761,7 @@
         h("option", { value: "right", text: "Yüzü sağa" }), h("option", { value: "left", text: "Yüzü sola" }));
       facing.value = c.facing || "right";
       var sizeSel = UI.sizeSelect(c, function () { App.commit(); });
+      var voiceSel = root.Voice ? root.Voice.voiceSelect(c, function () { App.commit(); }) : null;
       var imgs = h("div", { class: "sc-imgs" });
       c.images.forEach(function (im) {
         var a = p.assets[im.assetId]; if (!a) return;
@@ -770,10 +772,12 @@
           h("button", { type: "button", class: "rm", title: "Görseli çıkar", onclick: function () { App.removeCastImage(c.id, im.assetId); } }, "×")));
       });
       imgs.appendChild(h("button", { type: "button", class: "small", style: "align-self:flex-start", onclick: function () { App.pickCastImages(c.id); } }, "+ Görsel"));
-      cast.appendChild(h("div", { class: "sc-char" },
-        h("div", { class: "sc-char-head" }, thumb, nameInp, facing, sizeSel, h("button", { type: "button", class: "small danger", title: "Karakteri sil", onclick: function () { App.removeCastMember(c.id); } }, "✕")),
-        imgs));
+      var headKids = ["div", { class: "sc-char-head" }, thumb, nameInp, facing, sizeSel];
+      if (voiceSel) headKids.push(voiceSel);
+      headKids.push(h("button", { type: "button", class: "small danger", title: "Karakteri sil", onclick: function () { App.removeCastMember(c.id); } }, "✕"));
+      cast.appendChild(h("div", { class: "sc-char" }, h.apply(null, headKids), imgs));
     });
+    if (root.Voice && $("scVoice")) root.Voice.renderPanel($("scVoice"), { compact: true, onChange: function () { UI.renderScriptDialog(); } });
     var bgs = $("scBgs"); bgs.innerHTML = "";
     sc.backgrounds.forEach(function (b) {
       var a = p.assets[b.assetId]; if (!a) return;
@@ -833,16 +837,23 @@
     [["scTitle", "titleCard"], ["scEnd", "endCard"], ["scHeadings", "headings"], ["scFade", "fade"]].forEach(function (pair) {
       $(pair[0]).addEventListener("change", function () { App.ensureScript().settings[pair[1]] = $(pair[0]).checked; App.commit(); });
     });
+    var buildCtl = null;
     $("scBuild").addEventListener("click", function () {
-      var btn = $("scBuild"); btn.disabled = true; btn.textContent = "Üretiliyor…";
+      var btn = $("scBuild");
+      if (buildCtl) { buildCtl.abort(); btn.textContent = "Durduruluyor…"; return; }   // seslendirme sürerken: durdur, eldekiyle üret
+      btn.textContent = "Üretiliyor…";
       App.ensureScript().text = $("scText").value;
-      App.buildFromScript().then(function (res) {
-        btn.disabled = false; btn.textContent = "🎬 Filmi üret";
+      buildCtl = new AbortController();
+      App.buildFromScript({ signal: buildCtl.signal, onProgress: function (pr) {
+        if (pr.phase === "Seslendiriliyor") btn.textContent = "⏹ Seslendiriliyor " + Math.min(pr.done + 1, pr.total) + "/" + pr.total + (pr.eta ? " · ~" + Math.round(pr.eta) + " sn" : "") + " — durdur";
+        else btn.textContent = pr.phase + "…";
+      } }).then(function (res) {
+        buildCtl = null; btn.disabled = false; btn.textContent = "🎬 Filmi üret";
         $("scriptDialog").close();
         var msg = res.stats.scenes + " sahne, " + res.stats.layers + " katman, " + fmt(res.stats.seconds, 0) + " sn film üretildi" + (res.warnings.length ? " · " + res.warnings.length + " not (Senaryo penceresinde)" : "");
         App.toast(msg, "ok");
       }).catch(function (err) {
-        btn.disabled = false; btn.textContent = "🎬 Filmi üret";
+        buildCtl = null; btn.disabled = false; btn.textContent = "🎬 Filmi üret";
         var box = $("scPreview"); box.insertBefore(h("div", { class: "err" }, "Üretilemedi: " + (err && err.message || err)), box.firstChild);
       });
     });

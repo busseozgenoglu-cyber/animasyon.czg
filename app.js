@@ -480,7 +480,7 @@
   /* ── Senaryodan üretim ───────────────────────────────────── */
   App.ensureScript = function () { if (!S.project.script) S.project.script = Model.newScript(); return S.project.script; };
   App.addCastMember = function (name) {
-    var sc = App.ensureScript(), m = { id: M.uid("ch"), name: String(name || "Karakter").trim().slice(0, 40), facing: "right", images: [] };
+    var sc = App.ensureScript(), m = { id: M.uid("ch"), name: String(name || "Karakter").trim().slice(0, 40), facing: "right", images: [], size: 1, voiceId: null };
     sc.cast.push(m); App.commit(); return m;
   };
   App.renameCast = function (id, name) {
@@ -614,8 +614,14 @@
     var sc = App.ensureScript();
     if (!sc.text.trim()) return Promise.reject(new Error("Önce senaryoyu yaz (ya da “Örnek senaryo”yu aç)."));
     if (S.playing) App.pause();
-    return R.ensureAssets(S.project).then(function () {
+    // Seslendirme açıksa eksik replik klipleri önce SesKlon'dan alınır (sunucu yoksa uyarıyla sessiz devam)
+    var voiceStep = (sc.voice && sc.voice.enabled && root.Voice) ? root.Voice.prepare(S.project, { onProgress: opts.onProgress, signal: opts.signal }) : Promise.resolve(null);
+    return voiceStep.then(function (vres) {
+      if (opts.onProgress) { try { opts.onProgress({ phase: "Sahneler kuruluyor", done: 0, total: 0 }); } catch (e) { /* yoksay */ } }
+      return R.ensureAssets(S.project).then(function () { return vres; });
+    }).then(function (vres) {
       var res = root.Director.build(S.project);
+      if (vres) { res.warnings = (vres.warnings || []).concat(res.warnings); res.stats.voicedNew = vres.made; }
       S.project.scenes = res.scenes;
       // Kullanıcı özel bir ad vermediyse film adı senaryodaki BAŞLIK olur
       var curName = (S.project.name || "").trim(), prevTitle = (S.lastScriptTitle || "").trim();
@@ -626,6 +632,7 @@
       R.invalidateThumbs();
       return R.ensureAssets(S.project).then(function () {
         App.commit(); layoutStage(); UI.renderAll(); S.dirty = true;
+        if (root.Sfx && root.Sfx.prepare) root.Sfx.prepare(S.project).catch(function () { /* sessiz */ });
         UI.showBuildWarnings(res.warnings);
         S.playAll = true; S.loop = false; UI.updateToggles();
         if (opts.autoplay !== false) setTimeout(function () { App.play(); }, 150);

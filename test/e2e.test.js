@@ -24,7 +24,7 @@ async function png(page, name, w, h, drawSrc) {
   await ctx.addInitScript(() => { try { if (!localStorage.getItem("canlandir.mode")) localStorage.setItem("canlandir.mode", "studio"); } catch (e) { /* yoksay */ } });
   const page = await ctx.newPage();
   const errors = [];
-  page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") errors.push(m.type() + ": " + m.text()); });
+  page.on("console", (m) => { if ((m.type() === "error" || m.type() === "warning") && !/ERR_CONNECTION_REFUSED|Failed to load resource/.test(m.text())) errors.push(m.type() + ": " + m.text()); });   // kapalı SesKlon adresine deneme beklenen bir ağ hatasıdır
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("dialog", (d) => d.accept());
   try {
@@ -294,6 +294,49 @@ async function png(page, name, w, h, drawSrc) {
     await page.screenshot({ path: path.join(OUT, "07-kolay-mod.png") });
     await page.click("#wzStudio");
     check(!(await page.isVisible("#wizard")), "gelişmiş stüdyoya dönüldü");
+
+    console.log("21) Seslendirme (SesKlon)");
+    const mock = require("./mock-sesklon.js").start(0);
+    await mock.ready;
+    const voUrl = mock.url;
+    await page.click("#btnEasy"); await page.waitForTimeout(250);
+    await page.evaluate(() => Easy.goto(1));
+    await page.evaluate(() => document.querySelector("#wzVoice .vo-enable").click());
+    await page.waitForTimeout(200);
+    await page.fill("#wzVoice .vo-url", voUrl);
+    await page.click("#wzVoice .vo-connect");
+    await page.waitForSelector("#wzVoice .vo-status.ok", { timeout: 15000 });
+    check(/3 ses/.test(await page.textContent("#wzVoice .vo-msg")), "SesKlon'a bağlandı: " + (await page.textContent("#wzVoice .vo-msg")));
+    await page.click("#wzVoice .vo-auto");
+    await page.waitForTimeout(250);
+    const assigned = await page.evaluate(() => App.S.project.script.cast.map((c) => c.name + ":" + (c.voiceId || "-")).join());
+    check(/Ali:v-ali/.test(assigned) && /Ayşe:v-ayse/.test(assigned) && !/:-/.test(assigned), "sesler ada göre eşleşti, kalanlara sırayla ses verildi: " + assigned);
+    check((await page.$eval("#wzCast .vo-cast", (els) => els.length)) >= 4 && (await page.$eval("#wzVoice .vo-narrator", (el) => el.value)) !== "", "karakter kartlarında ses seçici var, anlatıcıya ses atandı");
+    await page.screenshot({ path: path.join(OUT, "09-seslendirme.png") });
+    await page.evaluate(() => { Easy.goto(2); const t = "BAŞLIK: Ses Denemesi\nSAHNE 1 - PARK - GÜNDÜZ\nALİ: Merhaba Ayşe, topumu gördün mü?\nAYŞE (mutlu): Evet! Bankın altında.\nANLATICI: Ve top bulundu."; document.getElementById("wzText").value = t; App.ensureScript().text = t; App.commit(); });
+    await page.click("#wzBuild");
+    await page.waitForFunction(() => Easy.step === 3, null, { timeout: 60000 });
+    await page.waitForTimeout(300);
+    const vo = await page.evaluate(() => { const p = App.S.project, s = p.scenes[1], cues = s.sfx.filter((q) => q.type === "clip"); const bubbles = s.layers.filter((l) => l.name.indexOf("Replik") === 0).map((l) => +(l.outPoint - l.inPoint).toFixed(2)); const ali = s.layers.find((l) => l.name === "Ali"); return { clips: Object.keys(p.clips).length, cues: cues.length, durs: cues.map((q) => p.clips[q.clip].duration), bubbles, voiced: Easy.stats.voiced, warnings: Easy.warnings, talk: ali ? ali.frameSets.filter((f2) => f2.frames.length > 1).map((f2) => +(f2.end - f2.start).toFixed(2)) : [], info: document.getElementById("wzFilmInfo").textContent }; });
+    check(vo.clips === 3 && vo.cues === 3 && vo.voiced === 3 && /3 parça seslendirildi/.test(vo.info), "3 parça seslendirildi, sahnede 3 ses ipucu var, özet gösteriyor");
+    check(vo.bubbles.length === 2 && Math.abs(vo.bubbles[0] - (vo.durs[0] + 0.5)) < 0.05 && vo.talk.length && Math.abs(vo.talk[0] - vo.durs[0]) < 0.05, "balon ve ağız hareketi konuşma süresine göre kuruldu (" + vo.bubbles[0] + " sn balon, " + vo.talk[0] + " sn konuşma, klip " + vo.durs[0] + " sn)");
+    const emo = mock.requests.bodies.find((b2) => /Bankın/.test(b2.text));
+    check(mock.requests.tts === 3 && emo && emo.emotion === "mutlu" && emo.voice_id === "v-ayse" && emo.style === "sohbet" && mock.requests.bodies.some((b2) => /top bulundu/.test(b2.text) && b2.style === "anlatıcı" && b2.voice_id === "v-anlatici"), "isteklerde doğru ses, duygu ve stil gitti (" + mock.requests.tts + " istek)");
+    await page.evaluate(() => App.buildFromScript({ autoplay: false }));
+    check(mock.requests.tts === 3 && (await page.evaluate(() => Object.keys(App.S.project.clips).length)) === 3, "yeniden üretimde klipler önbellekten geldi (yeni istek yok)");
+    const live = await page.evaluate(async () => { await Sfx.prepare(App.S.project); Easy.goto(3); await new Promise((r) => setTimeout(r, 600)); const btn = document.getElementById("wzPlay"); if (!/Durdur/.test(btn.textContent)) btn.click(); await new Promise((r) => setTimeout(r, 500)); const playing = /Durdur/.test(btn.textContent), ctx = !!Sfx.live.ctx, armed = !!Sfx.live.stopFn; if (playing) btn.click(); return { playing, ctx, armed }; });
+    check(live.playing && live.ctx && live.armed, "önizleme klipleri çözülmüş hâlde seslendirmeyle oynadı (ses bağlamı ve zamanlayıcı etkin)");
+    const [dlVo] = await Promise.all([page.waitForEvent("download", { timeout: 120000 }), page.evaluate(() => Exporter.exportVideo(App.S.project, { format: "webm", scale: 0.5, quality: "low", range: 1 }, null, { cancelled: false }).then((r) => Exporter.download(r.blob, "replik.webm")))]);
+    await dlVo.saveAs(path.join(OUT, "replik.webm"));
+    check(fs.statSync(path.join(OUT, "replik.webm")).size > 2000, "seslendirmeli sahne WebM olarak üretildi (ses ffprobe ile kontrol edilir)");
+    const roundtrip = await page.evaluate(() => { const json = Exporter.projectToJson(App.S.project); const p2 = Exporter.parseProject(json); return { clips: Object.keys(p2.clips).length, cues: p2.scenes[1].sfx.filter((q) => q.type === "clip").length, voice: p2.script.voice.enabled, cast: p2.script.cast.filter((c) => c.voiceId).length }; });
+    check(roundtrip.clips === 3 && roundtrip.cues === 3 && roundtrip.voice && roundtrip.cast >= 4, "proje dosyası klipleri, ses ipuçlarını ve ses atamalarını taşıyor");
+    await page.evaluate(() => { Voice.saveSettings({ url: "http://127.0.0.1:1" }); App.ensureScript().text += "\nALİ: Yeni bir cümle daha."; });
+    const off = await page.evaluate(() => App.buildFromScript({ autoplay: false }).then((r) => ({ scenes: r.scenes.length, warn: r.warnings.join(" | "), voiced: r.stats.voiced })));
+    check(off.scenes === 3 && off.voiced === 3 && /Seslendirme yapılamadı|bağlanılamadı|yarıda kesildi/.test(off.warn), "sunucu yokken film yine üretildi (eldeki 3 klip kullanıldı), uyarı verildi");
+    await page.evaluate(() => { Voice.saveSettings({ url: "http://localhost:8000" }); App.ensureScript().voice.enabled = false; App.commit(); });
+    mock.server.close();
+    await page.click("#wzStudio");
 
     console.log("20) Dar ekran düzeni");
     await page.setViewportSize({ width: 390, height: 844 });

@@ -46,7 +46,11 @@
   function newCamera() { return { base: { zoom: 1, x: 0.5, y: 0.5 }, tracks: { zoom: [], x: [], y: [] } }; }
 
   function newScript() {
-    return { text: "", cast: [], backgrounds: [], settings: { charHeight: 0.42, speed: "normal", bubbleStyle: "white", titleCard: true, endCard: true, headings: true, fade: true, sfx: true } };
+    return { text: "", cast: [], backgrounds: [], settings: { charHeight: 0.42, speed: "normal", bubbleStyle: "white", titleCard: true, endCard: true, headings: true, fade: true, sfx: true },
+      voice: newVoice() };
+  }
+  /* Seslendirme (SesKlon): kadro sesleri karakterlerde (voiceId), anlatıcı ve stil burada */
+  function newVoice() { return { enabled: false, narratorVoiceId: null, style: "sohbet", narratorStyle: "anlatıcı" }; 
   }
 
   function newProject(opts) {
@@ -54,7 +58,7 @@
     var p = {
       version: VERSION, name: opts.name || "Adsız Film",
       width: opts.width || 1280, height: opts.height || 720, fps: opts.fps || 24,
-      audio: null, assets: {}, scenes: [], script: newScript()
+      audio: null, clips: {}, assets: {}, scenes: [], script: newScript()
     };
     p.scenes.push(newScene("Sahne 1", opts.duration || 4));
     return p;
@@ -173,6 +177,14 @@
     if (raw.audio && typeof raw.audio.dataUrl === "string" && /^data:audio\//.test(raw.audio.dataUrl)) {
       p.audio = { name: str(raw.audio.name, "ses", 120), dataUrl: raw.audio.dataUrl, volume: num(raw.audio.volume, 1, 0, 1) };
     }
+    p.clips = {};   // seslendirme klipleri: anahtar → { dataUrl, duration, text }
+    if (raw.clips && typeof raw.clips === "object") {
+      Object.keys(raw.clips).forEach(function (key) {
+        var c = raw.clips[key];
+        if (!c || key.length > 80 || typeof c.dataUrl !== "string" || !/^data:audio\//.test(c.dataUrl) || !(+c.duration > 0)) return;
+        p.clips[key] = { dataUrl: c.dataUrl, duration: num(c.duration, 1, 0.05, 600), text: str(c.text, "", 400) };
+      });
+    }
     raw.scenes.forEach(function (s, i) {
       if (!s || typeof s !== "object") return;
       var sc = newScene(str(s.name, "Sahne " + (i + 1), 60), num(s.duration, 4, 0.1, 600));
@@ -190,7 +202,12 @@
       sc.camera = { base: { zoom: num(cb.zoom, 1, 0.2, 6), x: num(cb.x, 0.5, -1, 2), y: num(cb.y, 0.5, -1, 2) },
         tracks: { zoom: normalizeTrack(ct.zoom), x: normalizeTrack(ct.x), y: normalizeTrack(ct.y) } };
       sc.sfx = [];
-      if (Array.isArray(s.sfx)) s.sfx.forEach(function (q) { if (q && Number.isFinite(+q.t) && typeof q.type === "string") sc.sfx.push({ t: Math.max(0, +q.t), type: q.type.slice(0, 20) }); });
+      if (Array.isArray(s.sfx)) s.sfx.forEach(function (q) {
+        if (!q || !Number.isFinite(+q.t) || typeof q.type !== "string") return;
+        var cue = { t: Math.max(0, +q.t), type: q.type.slice(0, 20) };
+        if (cue.type === "clip") { if (typeof q.clip !== "string" || !p.clips[q.clip]) return; cue.clip = q.clip; }
+        sc.sfx.push(cue);
+      });
       if (Array.isArray(s.layers)) s.layers.forEach(function (l) { var L = normalizeLayer(l, p.assets); if (L) sc.layers.push(L); });
       p.scenes.push(sc);
     });
@@ -208,7 +225,8 @@
       if (!c || typeof c.name !== "string" || !c.name.trim()) return;
       var images = [];
       if (Array.isArray(c.images)) c.images.forEach(function (im) { if (im && typeof im.assetId === "string" && assets[im.assetId]) images.push({ assetId: im.assetId, role: oneOf(im.role, CAST_ROLES, "pose") }); });
-      sc.cast.push({ id: typeof c.id === "string" ? c.id : M.uid("ch"), name: c.name.trim().slice(0, 40), facing: oneOf(c.facing, ["right", "left"], "right"), images: images, size: num(c.size, 1, 0.25, 3) });
+      sc.cast.push({ id: typeof c.id === "string" ? c.id : M.uid("ch"), name: c.name.trim().slice(0, 40), facing: oneOf(c.facing, ["right", "left"], "right"), images: images, size: num(c.size, 1, 0.25, 3),
+        voiceId: (typeof c.voiceId === "string" && c.voiceId.length <= 64) ? c.voiceId : null });
     });
     if (Array.isArray(raw.backgrounds)) raw.backgrounds.forEach(function (b) {
       if (!b || typeof b.assetId !== "string" || !assets[b.assetId]) return;
@@ -220,6 +238,9 @@
       bubbleStyle: oneOf(st.bubbleStyle, ["white", "color"], "white"), titleCard: bool(st.titleCard, true), endCard: bool(st.endCard, true),
       headings: bool(st.headings, true), fade: bool(st.fade, true), sfx: bool(st.sfx, true)
     };
+    var vo = raw.voice || {};
+    sc.voice = { enabled: bool(vo.enabled, false), narratorVoiceId: (typeof vo.narratorVoiceId === "string" && vo.narratorVoiceId.length <= 64) ? vo.narratorVoiceId : null,
+      style: str(vo.style, "sohbet", 40) || "sohbet", narratorStyle: str(vo.narratorStyle, "anlatıcı", 40) || "anlatıcı" };
     return sc;
   }
 

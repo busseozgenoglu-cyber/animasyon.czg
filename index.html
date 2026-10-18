@@ -194,6 +194,7 @@
       <h1>Filmde kimler var?</h1>
       <p class="wz-lead">Hazır karakterlerden seç ya da kendi çizimini yükle (arka planı saydam PNG en iyisidir). Resimsiz karakterler için isimli bir çizgi film karakteri biz çizeriz.</p>
       <div class="wz-tools"><button type="button" id="wzGallery" class="wz-chip">🎭 Hazır karakter seç</button><span class="hint">Konuşma, yürüme, göz kırpma ve duygu kareleri hazır gelir.</span></div>
+      <div id="wzVoice"></div>
       <div id="wzCast" class="wz-cards"></div>
       <details class="wz-details">
         <summary>Arka plan resimleri (isteğe bağlı)</summary>
@@ -282,6 +283,7 @@
           <button type="button" id="scGallery" title="Hazır karakter kütüphanesi">🎭 Hazır karakter</button>
         </div>
         <p class="hint">Her karaktere en az bir görsel yükle (duruş). İstersen ağzı açık kare (konuşma), adım kareleri (yürüme) ve duygu görselleri de ekle; program yerinde kullanır. Görsel yüklenmeyen karakterler için renkli yer tutucu çizilir.</p>
+        <div id="scVoice"></div>
         <h3>Arka planlar <span class="unit">(isteğe bağlı)</span></h3>
         <div id="scBgs" class="sc-bgs"></div>
         <button type="button" id="scAddBg" class="small">+ Arka plan görseli</button>
@@ -378,20 +380,21 @@
 <input type="file" id="fileCast" accept="image/*,.svg" multiple hidden>
 <input type="file" id="fileBgs" accept="image/*,.svg" multiple hidden>
 
-<script src="lib/zip.js?v=2"></script>
-<script src="lib/gif-encoder.js?v=2"></script>
-<script src="lib/webm-fix.js?v=2"></script>
-<script src="lib/mp4-muxer.js?v=2"></script>
-<script src="motion.js?v=2"></script>
-<script src="model.js?v=2"></script>
-<script src="render.js?v=2"></script>
-<script src="demo.js?v=2"></script>
-<script src="exporter.js?v=2"></script>
-<script src="director.js?v=2"></script>
-<script src="characters.js?v=2"></script>
-<script src="sfx.js?v=2"></script>
-<script src="easy.js?v=2"></script>
-<script src="ui.js?v=2"></script>
-<script src="app.js?v=2"></script>
+<script src="lib/zip.js?v=3"></script>
+<script src="lib/gif-encoder.js?v=3"></script>
+<script src="lib/webm-fix.js?v=3"></script>
+<script src="lib/mp4-muxer.js?v=3"></script>
+<script src="motion.js?v=3"></script>
+<script src="model.js?v=3"></script>
+<script src="render.js?v=3"></script>
+<script src="demo.js?v=3"></script>
+<script src="exporter.js?v=3"></script>
+<script src="director.js?v=3"></script>
+<script src="characters.js?v=3"></script>
+<script src="sfx.js?v=3"></script>
+<script src="voice.js?v=3"></script>
+<script src="easy.js?v=3"></script>
+<script src="ui.js?v=3"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>

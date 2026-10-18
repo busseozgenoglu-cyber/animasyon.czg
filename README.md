@@ -80,6 +80,25 @@ Ali ve Ayşe sağa çıkar.
   Adı yeniden yazılabilir (`Karabaş` → `Boncuk`); **Boy** seçicisiyle sahnedeki boyu ayarlanır (çocuklar, yaşlılar ve evcil hayvanlar kendiliğinden daha kısa gelir). Senaryoda geçen ama görseli olmayan karakter, adı kütüphanedekiyle eşleşiyorsa o karakterle,
   eşleşmiyorsa isim etiketli otomatik bir karakterle çizilir. `Köpek sağdan girer.` gibi bir girişle sahneye gelen ad kendiliğinden karakter sayılır.
 
+## Seslendirme: karakterler kendi sesiyle konuşsun (SesKlon)
+
+Canlandır, [SesKlon](https://github.com/busseozgenoglu-cyber/ganzlab) ile (kendi bilgisayarında çalışan, Türkçe'ye özel ses klonlama
+ve metin seslendirme sunucusu) replikleri gerçek sesle okutur:
+
+1. SesKlon'u kur ve çalıştır (`docker compose up -d` ya da `run.sh` / `run.ps1`) → **http://localhost:8000**. **Sesler** sekmesinden
+   10–15 saniyelik kayıtlarla sesler ekle (her karakter için bir ses; izinli kayıtlar).
+2. Canlandır'da 1. adımdaki **🎙️ Seslendirme** panelini aç, adresi (ve varsa API anahtarını) yaz, **Bağlan** de. Her karakter kartında
+   **ses seçici** ve **▶ dene** çıkar; **Sesleri otomatik eşle** adı tutan sesi karaktere verir. Anlatıcı sesi ve konuşma stili panelden seçilir.
+3. **Filmi üret** deyince replik ve anlatım parçaları sırayla seslendirilir (düğme ilerlemeyi gösterir; **durdur** dersen eldeki seslerle devam eder).
+   Balonlar ve ağız hareketi gerçek konuşma süresine göre kurulur; sesler önizlemede çalar ve MP4/WebM dışa aktarımına müzik ve efektlerle birlikte karışır.
+
+- Üretilen sesler projede saklanır (aynı metin + ses + duygu yeniden istenmez); parantez duygusu (`(mutlu)`, `(üzgün)`…) SesKlon'un duygu
+  etiketine çevrilir. Sunucuya ulaşılamazsa film sessiz üretilir ve not düşülür.
+- Sesli MP4 kaydedemeyen tarayıcılarda (ör. Firefox) film sesiyle birlikte WebM olarak verilir.
+- CPU'da üretim yavaştır (10 sn ses ≈ 1–3 dk); NVIDIA GPU önerilir. Sunucu başka bir makinedeyse adresi ona göre yaz (SesKlon CORS'u açıktır;
+  internete açıyorsan API anahtarı ve HTTPS kullan).
+- Test için gerçek sunucu olmadan: `node test/mock-sesklon.js 8000` sahte bir SesKlon başlatır (sinüs sesli).
+
 ## Üç adımda çizgi film
 
 1. **Görsel ekle.** PNG, JPG, WebP, GIF, SVG; sürükle-bırak ya da yapıştır. Birden çok çizimi
@@ -118,7 +137,9 @@ Ali ve Ayşe sağa çıkar.
 | `easy.js` | Kolay mod: üç adımlı sihirbaz (karakter kartları, satır ekleme düğmeleri, önizleme, tek tıkla indirme) |
 | `director.js` | Senaryo ayrıştırıcı, eylem/duygu/kamera çözümleme, otomatik sahneleme (kalabalık yerleşimi, göz kırpma, gölge, kamera ve ses ipuçları), prosedürel arka plan |
 | `characters.js` | Hazır karakter kütüphanesi: parametrik insanlar, robot, köpek, kedi, kuş; tüm roller tuvalde çizilir |
-| `sfx.js` | Sentezlenmiş ses efektleri (Web Audio): sahne ipuçlarını önizlemede çalar, dışa aktarıma karıştırır |
+| `sfx.js` | Sentezlenmiş ses efektleri ve seslendirme klipleri (Web Audio): sahne ipuçlarını önizlemede çalar, dışa aktarıma karıştırır |
+| `voice.js` | SesKlon istemcisi: bağlantı, ses listesi, replik seslendirme (iş kuyruğu), karakter ses seçiciler ve panel |
+| `test/mock-sesklon.js` | Testler için sahte SesKlon sunucusu (API sözleşmesinin kullanılan bölümü) |
 | `demo.js` | Tuvalde çizilen örnek film |
 | `lib/gif-encoder.js`, `lib/gif-worker.js` | Bağımlılıksız GIF89a kodlayıcı (medyan kesme, Floyd–Steinberg, LZW) |
 | `lib/mp4-muxer.js` | WebCodecs H.264 çıktısını MP4'e yazan muxer |
