@@ -200,16 +200,19 @@ async function png(page, name, w, h, drawSrc) {
     await page.waitForSelector("#scriptDialog[open]");
     await page.click("#scSample");
     await page.waitForTimeout(400);
-    check(/2 sahne · 7 replik · 12 eylem/.test(await page.textContent("#scPreview")), "önizleme: sahne/replik/eylem sayıları");
+    check(/2 sahne · 7 replik · 15 eylem/.test(await page.textContent("#scPreview")), "önizleme: sahne/replik/eylem sayıları");
     await page.click("#scAutoCast");
-    await page.waitForTimeout(150);
-    check((await page.evaluate(() => App.S.project.script.cast.map((c) => c.name).join())) === "Ali,Ayşe", "senaryodan karakterler alındı");
-    // İlk karaktere görsel yükle (tarayıcıda çizilen PNG) → yer tutucu yerine kullanılır
-    const ali = await png(page, "ali-durus.png", 200, 300, "x.fillStyle='#e76f51';x.fillRect(60,120,80,150);x.fillStyle='#ffd6a5';x.beginPath();x.arc(100,80,45,0,7);x.fill();");
-    await page.evaluate(() => App.pickCastImages(App.S.project.script.cast[0].id));
+    await page.waitForTimeout(400);
+    const autoCast = await page.evaluate(() => App.S.project.script.cast.map((c) => c.name + ":" + c.images.length));
+    check(autoCast.join() === "Ali:10,Ayşe:10,Dede:10,Karabaş:10", "senaryodan karakterler alındı, kütüphaneden görselleri geldi: " + autoCast.join(" "));
+    const sizes = await page.evaluate(() => App.S.project.script.cast.map((c) => c.name + ":" + c.size).join());
+    check(sizes === "Ali:0.86,Ayşe:0.86,Dede:0.96,Karabaş:0.62", "karakter boyları türe göre (çocuk, yaşlı, köpek): " + sizes);
+    // Yeni karaktere görsel yükle (tarayıcıda çizilen PNG) → kendi çizimi kullanılır
+    const ali = await png(page, "test-durus.png", 200, 300, "x.fillStyle='#e76f51';x.fillRect(60,120,80,150);x.fillStyle='#ffd6a5';x.beginPath();x.arc(100,80,45,0,7);x.fill();");
+    await page.evaluate(() => { App.addCastMember("Test"); App.pickCastImages(App.S.project.script.cast[4].id); });
     await page.setInputFiles("#fileCast", [ali]);
-    await page.waitForFunction(() => App.S.project.script.cast[0].images.length === 1, null, { timeout: 10000 });
-    check((await page.evaluate(() => App.S.project.script.cast[0].images[0].role)) === "pose", "yüklenen ilk görsel 'duruş' rolü aldı");
+    await page.waitForFunction(() => App.S.project.script.cast[4].images.length === 1, null, { timeout: 10000 });
+    check((await page.evaluate(() => App.S.project.script.cast[4].images[0].role)) === "pose", "yüklenen ilk görsel 'duruş' rolü aldı");
     await page.click("#scBuild");
     await page.waitForFunction(() => !document.getElementById("scriptDialog").open, null, { timeout: 30000 });
     await page.waitForTimeout(400);
@@ -217,7 +220,12 @@ async function png(page, name, w, h, drawSrc) {
       bubbles: App.S.project.scenes[1].layers.filter((l) => l.name.indexOf("Replik") === 0).length, aliFrames: (App.S.project.scenes[1].layers.find((l) => l.name === "Ali") || {}).frames, playing: App.S.playing, title: App.S.project.name }));
     check(film.n === 4 && film.names[0] === "Başlık" && film.names[3] === "Son", "başlık + 2 sahne + SON üretildi: " + film.names.join(" | "));
     check(film.total > 40 && film.bubbles === 4, "sahne 1'de 4 konuşma balonu, toplam " + film.total.toFixed(1) + " sn");
-    check(film.aliFrames && film.aliFrames.length === 1, "Ali yüklenen görselle kuruldu");
+    check(film.aliFrames && film.aliFrames.length === 1, "Ali kütüphane görseliyle kuruldu");
+    const pro = await page.evaluate(() => { const s = App.S.project.scenes[1], chars = s.layers.filter((l) => l.shadow); return { camKeys: s.camera.tracks.zoom.length, zoomMax: Math.max.apply(null, s.camera.tracks.zoom.map((k) => k.v)), sfx: Array.from(new Set(s.sfx.map((q) => q.type))), chars: chars.map((l) => l.name), blink: chars.some((l) => l.frameSets.some((fs) => fs.frames.length === 1 && fs.end - fs.start < 0.2)), hud: s.layers.filter((l) => l.hud).map((l) => l.name), titleSfx: App.S.project.scenes[0].sfx.map((q) => q.type).join() }; });
+    check(pro.camKeys >= 4 && pro.zoomMax > 1.3, "kamera ipuçları anahtar kare oldu (" + pro.camKeys + " anahtar, en çok " + pro.zoomMax + "x)");
+    check(pro.sfx.indexOf("pop") >= 0 && pro.sfx.indexOf("whoosh") >= 0 && pro.sfx.indexOf("boing") >= 0 && pro.titleSfx === "chime", "ses ipuçları: " + pro.sfx.join(", ") + " + başlıkta çan");
+    check(pro.chars.length >= 3 && pro.blink, "gölgeli karakter katmanları (" + pro.chars.join(", ") + ") ve göz kırpma kareleri");
+    check(pro.hud.length === 1 && pro.hud[0] === "Sahne başlığı", "sahne başlığı ekran katmanı (kameradan etkilenmez)");
     check(film.title === "Kayıp Top", "film adı senaryodaki BAŞLIK'tan alındı: " + film.title);
     check(film.playing, "üretim sonrası film kendiliğinden oynuyor");
     await page.evaluate(() => { App.pause(); App.switchScene(1, true); App.setTime(8); });
@@ -235,6 +243,16 @@ async function png(page, name, w, h, drawSrc) {
     await page.click("#wzCast .wz-card.add");
     await page.waitForTimeout(350);
     check((await page.$$eval("#wzCast .wz-card:not(.add)", (els) => els.length)) === cardsBefore + 1, "karakter kartı eklendi (resim seçici açıldı)");
+    await page.click("#wzGallery");
+    await page.waitForSelector("#galleryDialog[open]");
+    check((await page.$$eval("#galleryGrid .gal-item", (els) => els.length)) >= 18, "hazır karakter galerisi açıldı");
+    await page.click("#galleryGrid .gal-item:has-text('Robi')");
+    await page.click("#galleryGrid .gal-item:has-text('Pamuk')");
+    await page.click("#galleryAdd");
+    await page.waitForFunction(() => !document.getElementById("galleryDialog").open, null, { timeout: 10000 });
+    const robi = await page.evaluate(() => { const c = App.S.project.script.cast.find((x) => x.name === "Robi"); return c ? c.images.map((i) => i.role) : null; });
+    check(robi && robi.length === 10 && ["pose", "talk", "walk", "blink", "mutlu", "saskin"].every((r) => robi.indexOf(r) >= 0), "galeriden Robi ve Pamuk eklendi; Robi: " + (robi ? robi.length + " görsel (duruş, konuşma, yürüme, göz kırpma, duygular)" : "yok"));
+    await page.screenshot({ path: path.join(OUT, "08-galeri.png") });
     await page.evaluate(() => Easy.goto(2));
     await page.click('#wizard [data-ins="scene"]');
     await page.click("#wzLineBtn");
@@ -246,7 +264,7 @@ async function png(page, name, w, h, drawSrc) {
     // Karakter adını değiştir → senaryo güncellenir
     await page.evaluate(() => { const c = App.S.project.script.cast.find((x) => x.name === "Ayşe"); if (c) App.renameCast(c.id, "Zeynep"); });
     const renamed = await page.evaluate(() => App.S.project.script.text);
-    check(/ZEYNEP \(mutlu\): Ali! Bak ne buldum!/.test(renamed) && /Zeynep sağdan koşarak girer\./.test(renamed) && /Ali Ayşe'ye doğru yürür\./.test(renamed), "ad değişince senaryo güncellendi (ekli 'Ayşe'ye' dokunulmadı)");
+    check(/ZEYNEP \(mutlu\): Ali! Bak, Karabaş topunu bulmuş!/.test(renamed) && /Zeynep sağdan girer\./.test(renamed) && /Kamera Ayşe'ye yaklaşır\./.test(renamed), "ad değişince senaryo güncellendi (ekli 'Ayşe'ye' dokunulmadı)");
     await page.evaluate(() => { const c = App.S.project.script.cast.find((x) => x.name === "Zeynep"); App.renameCast(c.id, "Ayşe"); });
     // Dikey biçim seç
     await page.click('#wzFormat button[data-size="1080x1920"]');
@@ -267,6 +285,9 @@ async function png(page, name, w, h, drawSrc) {
     await dlMus.saveAs(path.join(OUT, "sesli.webm"));
     check(fs.statSync(path.join(OUT, "sesli.webm")).size > 2000, "sesli WebM üretildi (ses kanalı ffprobe ile ayrıca kontrol edilir)");
     await page.evaluate(() => App.removeAudio());
+    const [dlSfx] = await Promise.all([page.waitForEvent("download", { timeout: 120000 }), page.evaluate(() => Exporter.exportVideo(App.S.project, { format: "webm", scale: 0.5, quality: "low", range: 0 }, null, { cancelled: false }).then((r) => Exporter.download(r.blob, "efekt.webm")))]);
+    await dlSfx.saveAs(path.join(OUT, "efekt.webm"));
+    check(fs.statSync(path.join(OUT, "efekt.webm")).size > 2000, "müziksiz filmde ses efektleri WebM'e karıştı (ses kanalı ffprobe ile kontrol edilir)");
     const [dlEasy] = await Promise.all([page.waitForEvent("download", { timeout: 180000 }), page.click('#wizard [data-fmt="gif"]')]);
     await dlEasy.saveAs(path.join(OUT, "kolay.gif"));
     check(fs.statSync(path.join(OUT, "kolay.gif")).size > 5000, "kolay moddan tek tıkla GIF indirildi");

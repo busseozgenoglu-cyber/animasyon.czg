@@ -22,12 +22,13 @@ Derleme adımı yoktur; `.nojekyll` dosyası hazırdır.
 
 Sayfa ilk açıldığında üç adımlı sihirbaz gelir; başka bir şey bilmek gerekmez:
 
-1. **Karakterler** — kart aç, ad yaz, resmi tıkla ya da sürükle. İsteğe bağlı ek resimler (ağzı açık kare, adım kareleri, duygular).
+1. **Karakterler** — **🎭 Hazır karakter seç** ile kütüphaneden ekle (18 hazır karakter; tüm kareleri hazır gelir) ya da kart aç, ad yaz, kendi resmini tıkla/sürükle.
+   İsteğe bağlı ek resimler (ağzı açık kare, adım kareleri, göz kırpma, duygular); her kartta yüz yönü ve **Boy** seçimi.
 2. **Senaryo** — düğmelerle satır ekle: *Yeni sahne*, *Replik ▾* (kim konuşsun), *Eylem ▾* (kim, ne yapsın: girer, zıplar, el sallar…), *Anlatıcı*.
    Yazdıkça sahne/replik sayısı ve tahmini süre görünür. “Örnek senaryoyu yükle” ile hemen deneyebilirsin.
 3. **Film** — otomatik üretilen filmi izle, tek tıkla **MP4 / GIF / WebM** indir, istersen projeyi kaydet.
 
-2. adımda **film biçimi** (yatay / kare / dikey) ve isteğe bağlı ince ayarlar (karakter boyu, konuşma hızı, balon rengi, kartlar);
+2. adımda **film biçimi** (yatay / kare / dikey) ve isteğe bağlı ince ayarlar (karakter boyu, konuşma hızı, balon rengi, kartlar, ses efektleri);
 3. adımda **müzik / ses** ekleme (videolara karışır), tam ekran önizleme, dışa aktarmayı iptal.
 
 “Gelişmiş stüdyo ›” katman, zaman çizelgesi ve efekt düzeyinde ince ayar içindir; oradan **✨ Kolay mod** ile geri dönülür. Tercih hatırlanır.
@@ -65,9 +66,19 @@ Ali ve Ayşe sağa çıkar.
   Ünlemle biten replikte karakter hafifçe zıplar, soru işaretinde başını yana eğer; dinleyen karakter konuşana döner ve başını sallar.
 - **Arka plan:** her sahnede kilitli bir “Arka plan” katmanı olarak gelir ve yavaşça yaklaşır/uzaklaşır (kamera hissi); bulutlar akar.
 - **Anlatıcı:** `ANLATICI: metin` → alt yazı.
-- **Karakter görselleri:** her karaktere bir duruş görseli yeter; saydam PNG'lerin boş kenarları kendiliğinden kırpılır. İstersen ağzı açık kare (konuşma), adım kareleri (yürüme) ve
-  duygu görselleri ekle; dosya adından rol tahmin edilir (`ali-konusma.png`, `ayse-yuru1.png`, `ali-mutlu.png`). Görseli olmayan
-  karakter için isimli renkli bir yer tutucu çizilir.
+- **Kamera:** `Kamera Ayşe'ye yaklaşır.` (yakın çekim), `Kamera uzaklaşır.` (genel plan), `Kamera sağa kayar.` (kaydırma), `Yakın çekim: Ali`.
+  Kamera hareketi sıradaki replikle örtüşür; stüdyoda sahne özelliklerindeki **Kamera** bölümünden ve zaman çizelgesindeki kamera satırından elle de kurulur.
+- **Ses efektleri:** balon açılırken *pop*, giriş/çıkışta *vınn*, zıplamada *boing*, düşmede *güm*, alkış, başlıkta çan. Dosya gerekmez (tarayıcıda sentezlenir);
+  önizlemede çalar, WebM/MP4 dışa aktarımına müzikle birlikte karışır. Sihirbazın ayarlarından kapatılabilir.
+- **Hayvanlar:** `Karabaş havlar.`, `Pamuk miyavlar.`, `Cik cıvıldar.`, `Karabaş kuyruk sallar.` → ses balonu ve hareket.
+- **Kalabalık:** 4+ karakterde boylar kendiliğinden küçülür, sığmayınca arka sıra açılır (arka sıra daha küçük ve yukarıda, önü kapatmaz).
+- **Karakter görselleri:** her karaktere bir duruş görseli yeter; saydam PNG'lerin boş kenarları kendiliğinden kırpılır. İstersen ağzı açık kare (konuşma), adım kareleri (yürüme),
+  göz kırpma karesi ve duygu görselleri ekle; dosya adından rol tahmin edilir (`ali-konusma.png`, `ayse-yuru1.png`, `ali-kirpma.png`, `ali-mutlu.png`).
+  Her karakter yerde yumuşak bir **gölge** taşır (zıplayınca küçülür) ve göz kırpma karesi varsa 2–5 saniyede bir **göz kırpar**.
+- **Hazır karakterler (🎭):** 18 karakterlik kütüphane — Ali, Ayşe, Can, Elif, Anne, Baba, Dede, Nine, Öğretmen, Kral, Prenses, Şövalye, Korsan, Uzaylı, Robi (robot),
+  Karabaş (köpek), Pamuk (kedi), Cik (kuş). Hepsi aynı çizgi film üslubunda, tuvalde çizilir; duruş, 2 konuşma, 2 yürüme, göz kırpma ve 4 duygu karesiyle gelir.
+  Adı yeniden yazılabilir (`Karabaş` → `Boncuk`); **Boy** seçicisiyle sahnedeki boyu ayarlanır (çocuklar, yaşlılar ve evcil hayvanlar kendiliğinden daha kısa gelir). Senaryoda geçen ama görseli olmayan karakter, adı kütüphanedekiyle eşleşiyorsa o karakterle,
+  eşleşmiyorsa isim etiketli otomatik bir karakterle çizilir. `Köpek sağdan girer.` gibi bir girişle sahneye gelen ad kendiliğinden karakter sayılır.
 
 ## Üç adımda çizgi film
 
@@ -105,7 +116,9 @@ Ali ve Ayşe sağa çıkar.
 | `render.js` | Sahne çizimi, metin/balon, isabet testi, küçük resimler |
 | `exporter.js` | GIF / video / PNG-ZIP / proje dosyası üretimi, sahneleri birleştiren zaman çizgisi |
 | `easy.js` | Kolay mod: üç adımlı sihirbaz (karakter kartları, satır ekleme düğmeleri, önizleme, tek tıkla indirme) |
-| `director.js` | Senaryo ayrıştırıcı, eylem/duygu çözümleme, otomatik sahneleme, prosedürel arka plan ve yer tutucu karakterler |
+| `director.js` | Senaryo ayrıştırıcı, eylem/duygu/kamera çözümleme, otomatik sahneleme (kalabalık yerleşimi, göz kırpma, gölge, kamera ve ses ipuçları), prosedürel arka plan |
+| `characters.js` | Hazır karakter kütüphanesi: parametrik insanlar, robot, köpek, kedi, kuş; tüm roller tuvalde çizilir |
+| `sfx.js` | Sentezlenmiş ses efektleri (Web Audio): sahne ipuçlarını önizlemede çalar, dışa aktarıma karıştırır |
 | `demo.js` | Tuvalde çizilen örnek film |
 | `lib/gif-encoder.js`, `lib/gif-worker.js` | Bağımlılıksız GIF89a kodlayıcı (medyan kesme, Floyd–Steinberg, LZW) |
 | `lib/mp4-muxer.js` | WebCodecs H.264 çıktısını MP4'e yazan muxer |

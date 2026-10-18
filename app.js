@@ -574,6 +574,7 @@
     var n = root.Director.norm(name);
     if (/konus|agiz|talk|mouth/.test(n)) return "talk";
     if (/yuru|adim|walk|step|kos/.test(n)) return "walk";
+    if (/kirp|blink|goz kapali|gozkapali|kapali/.test(n)) return "blink";
     if (/mutlu|happy|gul/.test(n)) return "mutlu";
     if (/uzgun|sad|agla/.test(n)) return "uzgun";
     if (/kizgin|angry|sinir/.test(n)) return "kizgin";
@@ -596,10 +597,16 @@
     App.commit(); UI.renderScriptDialog();
   };
   App.autoCastFromScript = function () {
-    var sc = App.ensureScript(), D = root.Director, ast = D.parse(sc.text), added = 0;
+    var sc = App.ensureScript(), D = root.Director, added = 0;
     var have = sc.cast.map(function (c) { return D.norm(c.name); });
-    ast.speakers.forEach(function (nm) { if (have.indexOf(D.norm(nm)) < 0) { sc.cast.push({ id: M.uid("ch"), name: nm, facing: "right", images: [] }); have.push(D.norm(nm)); added++; } });
-    if (added) App.commit();
+    var names = D.analyze(sc.text, sc.cast.map(function (c) { return c.name; })).names;
+    names.forEach(function (nm) {
+      if (have.indexOf(D.norm(nm)) >= 0) return;
+      var lib = root.Characters ? root.Characters.findByName(nm) : null, m = { id: M.uid("ch"), name: nm, facing: "right", images: [] };
+      if (lib) { try { var gen = root.Characters.generate(S.project, lib.id, nm); m.images = gen.images; m.facing = gen.facing; m.libraryId = gen.libraryId; m.size = gen.size; } catch (e) { /* görselsiz devam */ } }
+      sc.cast.push(m); have.push(D.norm(nm)); added++;
+    });
+    if (added) { App.commit(); R.ensureAssets(S.project); }
     return added;
   };
   App.buildFromScript = function (opts) {
@@ -624,6 +631,47 @@
         if (opts.autoplay !== false) setTimeout(function () { App.play(); }, 150);
         return res;
       });
+    });
+  };
+
+  /* ── Kamera (sahne) ──────────────────────────────────────── */
+  function cam() { var sc = App.scene(); if (!sc.camera) sc.camera = Model.newCamera(); return sc.camera; }
+  App.cameraValue = function (prop) { var c = cam(); return c.tracks[prop].length ? M.trackValue(c.tracks[prop], S.time, c.base[prop]) : c.base[prop]; };
+  App.setCameraProp = function (prop, v) {
+    if (!Number.isFinite(v)) return false;
+    var c = cam(), tr = c.tracks[prop];
+    if (tr.length) { var created = !M.hasKey(tr, S.time); M.setKey(tr, S.time, v); return created; }
+    c.base[prop] = v; return false;
+  };
+  App.cameraKeyTimes = function () { var c = cam(), set = {}, out = []; ["zoom", "x", "y"].forEach(function (pr) { c.tracks[pr].forEach(function (k) { var key = k.t.toFixed(4); if (!set[key]) { set[key] = 1; out.push(k.t); } }); }); return out.sort(function (a, b) { return a - b; }); };
+  App.cameraHasKeyAt = function (t) { return App.cameraKeyTimes().some(function (k) { return Math.abs(k - t) < 1e-4; }); };
+  App.toggleCameraKey = function (t) {
+    var c = cam();
+    if (App.cameraHasKeyAt(t)) { ["zoom", "x", "y"].forEach(function (pr) { M.removeKey(c.tracks[pr], t); if (c.tracks[pr].length === 1) { c.base[pr] = c.tracks[pr][0].v; c.tracks[pr] = []; } }); }
+    else ["zoom", "x", "y"].forEach(function (pr) { M.setKey(c.tracks[pr], t, App.cameraValue(pr)); });
+    App.commit(); UI.renderProps(); UI.renderTimeline(); S.dirty = true;
+  };
+  App.moveCameraKeys = function (t0, t1) { var c = cam(); M.moveKeys({ tracks: c.tracks }, t0, t1); S.dirty = true; };
+  App.resetCamera = function () { App.scene().camera = Model.newCamera(); App.commit(); UI.renderProps(); UI.renderTimeline(); S.dirty = true; };
+
+  /* ── Hazır karakter kütüphanesi ──────────────────────────── */
+  /* ids: kütüphane kimlikleri ya da { id, name } nesneleri; aynı adlı karakter varsa görselleri yoksa doldurulur */
+  App.addLibraryCast = function (items, opts) {
+    opts = opts || {};
+    var sc = App.ensureScript(), D = root.Director, C = root.Characters, added = [];
+    if (!C) return Promise.resolve(added);
+    items.forEach(function (it) {
+      var id = typeof it === "string" ? it : it.id, nameOverride = typeof it === "string" ? null : it.name;
+      var gen;
+      try { gen = C.generate(S.project, id, nameOverride); } catch (e) { return; }
+      var existing = sc.cast.find(function (c) { return D.norm(c.name) === D.norm(gen.name); });
+      if (existing) { if (!existing.images.length) { existing.images = gen.images; existing.facing = gen.facing; existing.libraryId = gen.libraryId; existing.size = gen.size; added.push(existing); } return; }
+      var m = { id: M.uid("ch"), name: gen.name, facing: gen.facing, images: gen.images, libraryId: gen.libraryId, size: gen.size };
+      sc.cast.push(m); added.push(m);
+    });
+    return R.ensureAssets(S.project).then(function () {
+      if (added.length) { App.commit(); UI.renderScriptDialog(); if (root.Easy) root.Easy.refreshCast(); }
+      return added;
     });
   };
 
@@ -682,6 +730,7 @@
   };
   App.stepFrame = function (n) { if (S.playing) App.pause(); App.setTime(S.time + n / S.project.fps); };
   function syncAudio() {
+    if (root.Sfx && S.playing) root.Sfx.live.play(S.project, App.globalTime());
     if (!S.project.audio) return;
     try { audioEl.currentTime = App.globalTime(); } catch (e) { /* yoksay */ }
   }
@@ -690,13 +739,15 @@
     var sc = App.scene();
     if (S.time >= sc.duration - 1 / S.project.fps - 1e-6 && !(S.playAll && S.sceneIndex < S.project.scenes.length - 1)) S.time = 0;
     S.playing = true; S.playT0 = S.time; S.playWall = performance.now();
-    if (S.project.audio) { syncAudio(); audioEl.play().catch(function () { /* otomatik oynatma engeli */ }); }
+    syncAudio();
+    if (S.project.audio) audioEl.play().catch(function () { /* otomatik oynatma engeli */ });
     UI.updateToggles();
   };
   App.pause = function () {
     if (!S.playing) return;
     S.playing = false;
     audioEl.pause();
+    if (root.Sfx) root.Sfx.live.stop();
     UI.updateToggles(); UI.syncProps(); UI.updatePlayhead();
   };
   App.togglePlay = function () { if (S.playing) App.pause(); else App.play(); };
@@ -760,14 +811,15 @@
   var HANDLE = 7;
   function gizmo(L) {
     var p = S.project, sc = App.scene(), k = S.view.scale;
-    var tr = R.transformAt(p, sc, L, S.time), size = R.layerSize(L, p);
-    var c = R.corners(L, tr, size).map(function (pt) { return { x: pt.x * k, y: pt.y * k }; });
+    var tr = R.transformAt(p, sc, L, S.time), size = R.layerSize(L, p), cam = L.hud ? null : R.cameraOf(p, sc, S.time);
+    var c = R.corners(L, tr, size).map(function (pt) { var v = R.toView(cam, pt); return { x: v.x * k, y: v.y * k }; });
     var mid = function (a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
     var edges = [mid(c[0], c[1]), mid(c[1], c[2]), mid(c[2], c[3]), mid(c[3], c[0])];
     var top = edges[0], center = { x: (c[0].x + c[2].x) / 2, y: (c[0].y + c[2].y) / 2 };
     var nx = top.x - center.x, ny = top.y - center.y, len = Math.hypot(nx, ny) || 1;
     var rot = { x: top.x + nx / len * 26, y: top.y + ny / len * 26 };
-    return { corners: c, edges: edges, rot: rot, top: top, anchor: { x: tr.x * k, y: tr.y * k }, tr: tr, size: size };
+    var av = R.toView(cam, { x: tr.x, y: tr.y });
+    return { corners: c, edges: edges, rot: rot, top: top, anchor: { x: av.x * k, y: av.y * k }, tr: tr, size: size, cam: cam };
   }
   function hitHandle(g, pt) {
     var r = HANDLE + 4;
@@ -845,7 +897,8 @@
       if (d.mode === "empty" || !d.layer || d.layer.locked) return;
       var L2 = d.layer, pt = { x: css.x / k, y: css.y / k }, t0 = d.tr0;
       if (d.mode === "move") {
-        var dx = pt.x - d.start.x, dy = pt.y - d.start.y;
+        var z = d.g0 && d.g0.cam ? d.g0.cam.zoom : 1;
+        var dx = (pt.x - d.start.x) / z, dy = (pt.y - d.start.y) / z;
         if (ev.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
         App.setLayerProp(L2, "x", t0.x + dx); App.setLayerProp(L2, "y", t0.y + dy);
       } else if (d.mode === "rotate") {

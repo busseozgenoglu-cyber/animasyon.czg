@@ -192,7 +192,8 @@
   <div class="wz-body">
     <section class="wz-step" data-step="1">
       <h1>Filmde kimler var?</h1>
-      <p class="wz-lead">Her karaktere bir ad ve bir resim ver. Çizim, fotoğraf ya da çıkartma olabilir; arka planı saydam PNG en iyisidir. Resim eklemezsen o karakter için renkli bir yer tutucu çizeriz.</p>
+      <p class="wz-lead">Hazır karakterlerden seç ya da kendi çizimini yükle (arka planı saydam PNG en iyisidir). Resimsiz karakterler için isimli bir çizgi film karakteri biz çizeriz.</p>
+      <div class="wz-tools"><button type="button" id="wzGallery" class="wz-chip">🎭 Hazır karakter seç</button><span class="hint">Konuşma, yürüme, göz kırpma ve duygu kareleri hazır gelir.</span></div>
       <div id="wzCast" class="wz-cards"></div>
       <details class="wz-details">
         <summary>Arka plan resimleri (isteğe bağlı)</summary>
@@ -231,6 +232,7 @@
           <label class="check"><input type="checkbox" id="wzTitle"> Açılışta başlık kartı</label>
           <label class="check"><input type="checkbox" id="wzEnd"> Sonda “SON” kartı</label>
           <label class="check"><input type="checkbox" id="wzHeadings"> Sahne adını köşede göster</label>
+          <label class="check"><input type="checkbox" id="wzSfx"> Ses efektleri (pop, vınn, boing)</label>
         </div>
       </details>
       <div class="wz-nav"><button type="button" class="wz-btn ghost" data-go="1">← Karakterler</button><button type="button" class="wz-btn primary big" id="wzBuild">🎬 Filmi üret</button></div>
@@ -277,6 +279,7 @@
         <div class="pill-row">
           <button type="button" id="scAddChar">+ Karakter</button>
           <button type="button" id="scAutoCast" title="Senaryoda konuşan herkesi listeye ekler">Senaryodan al</button>
+          <button type="button" id="scGallery" title="Hazır karakter kütüphanesi">🎭 Hazır karakter</button>
         </div>
         <p class="hint">Her karaktere en az bir görsel yükle (duruş). İstersen ağzı açık kare (konuşma), adım kareleri (yürüme) ve duygu görselleri de ekle; program yerinde kullanır. Görsel yüklenmeyen karakterler için renkli yer tutucu çizilir.</p>
         <h3>Arka planlar <span class="unit">(isteğe bağlı)</span></h3>
@@ -307,6 +310,15 @@
       <button value="cancel" class="ghost" type="submit">Kapat</button>
       <button id="scBuild" class="primary" type="button">🎬 Filmi üret</button>
     </footer>
+  </form>
+</dialog>
+
+<dialog id="galleryDialog" class="dlg">
+  <form method="dialog" class="dlg-card wide">
+    <header><h2>Hazır karakterler</h2><button value="cancel" class="x" type="submit" aria-label="Kapat">×</button></header>
+    <p class="muted" style="margin:0">Seç ve ekle. Her karakterin konuşma, yürüme, göz kırpma ve duygu kareleri hazırdır; adını sonradan değiştirebilirsin.</p>
+    <div id="galleryGrid" class="gal-grid"></div>
+    <footer><span id="galleryCount" class="muted" style="flex:1;font-size:13px"></span><button value="cancel" class="ghost" type="submit">Vazgeç</button><button id="galleryAdd" class="primary" type="button">Seçilenleri ekle</button></footer>
   </form>
 </dialog>
 
@@ -366,18 +378,20 @@
 <input type="file" id="fileCast" accept="image/*,.svg" multiple hidden>
 <input type="file" id="fileBgs" accept="image/*,.svg" multiple hidden>
 
-<script src="lib/zip.js?v=1"></script>
-<script src="lib/gif-encoder.js?v=1"></script>
-<script src="lib/webm-fix.js?v=1"></script>
-<script src="lib/mp4-muxer.js?v=1"></script>
-<script src="motion.js?v=1"></script>
-<script src="model.js?v=1"></script>
-<script src="render.js?v=1"></script>
-<script src="demo.js?v=1"></script>
-<script src="exporter.js?v=1"></script>
-<script src="director.js?v=1"></script>
-<script src="easy.js?v=1"></script>
-<script src="ui.js?v=1"></script>
-<script src="app.js?v=1"></script>
+<script src="lib/zip.js?v=2"></script>
+<script src="lib/gif-encoder.js?v=2"></script>
+<script src="lib/webm-fix.js?v=2"></script>
+<script src="lib/mp4-muxer.js?v=2"></script>
+<script src="motion.js?v=2"></script>
+<script src="model.js?v=2"></script>
+<script src="render.js?v=2"></script>
+<script src="demo.js?v=2"></script>
+<script src="exporter.js?v=2"></script>
+<script src="director.js?v=2"></script>
+<script src="characters.js?v=2"></script>
+<script src="sfx.js?v=2"></script>
+<script src="easy.js?v=2"></script>
+<script src="ui.js?v=2"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

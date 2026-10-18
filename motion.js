@@ -435,12 +435,19 @@
 
   function quantizeTime(t, fps) { return Math.round(t * fps) / fps; }
 
+  /* Sahne kamerası: yakınlaştırma ve merkez (sahne oranı olarak 0..1) */
+  function cameraAt(scene, t) {
+    var c = scene && scene.camera;
+    if (!c) return { zoom: 1, x: 0.5, y: 0.5 };
+    return { zoom: trackValue(c.tracks.zoom, t, c.base.zoom), x: trackValue(c.tracks.x, t, c.base.x), y: trackValue(c.tracks.y, t, c.base.y) };
+  }
+
   return {
     EASINGS: EASINGS, EASING_LIST: EASING_LIST, ease: ease,
     trackValue: trackValue, setKey: setKey, removeKey: removeKey, hasKey: hasKey, findKey: findKey,
     keyTimes: keyTimes, hasAnyKey: hasAnyKey, moveKeys: moveKeys,
     EFFECTS: EFFECTS, EFFECT_LIST: EFFECT_LIST, createEffect: createEffect, effectWindow: effectWindow,
     evalLayer: evalLayer, frameIndex: frameIndex, frameAt: frameAt, layerVisibleAt: layerVisibleAt, layerEnd: layerEnd,
-    quantizeTime: quantizeTime, uid: uid, clamp: clamp
+    quantizeTime: quantizeTime, cameraAt: cameraAt, uid: uid, clamp: clamp
   };
 });

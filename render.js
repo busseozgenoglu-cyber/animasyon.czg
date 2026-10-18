@@ -120,13 +120,26 @@
     return { u: (lx + layer.anchor.x * size.w) / size.w, v: (ly + layer.anchor.y * size.h) / size.h };
   }
 
+  /* Kamera: null = kimlik; aksi hâlde { zoom, cx, cy, W, H } (piksel) */
+  function cameraOf(project, scene, t) {
+    var v = M.cameraAt(scene, t);
+    if (Math.abs(v.zoom - 1) < 1e-6 && Math.abs(v.x - 0.5) < 1e-6 && Math.abs(v.y - 0.5) < 1e-6) return null;
+    return { zoom: v.zoom, cx: v.x * project.width, cy: v.y * project.height, W: project.width, H: project.height };
+  }
+  function toView(cam, pt) { if (!cam) return pt; return { x: (pt.x - cam.cx) * cam.zoom + cam.W / 2, y: (pt.y - cam.cy) * cam.zoom + cam.H / 2 }; }
+  function fromView(cam, pt) { if (!cam) return pt; return { x: (pt.x - cam.W / 2) / cam.zoom + cam.cx, y: (pt.y - cam.H / 2) / cam.zoom + cam.cy }; }
+  function viewCorners(project, scene, t, layer, tr, size) { var cam = layer.hud ? null : cameraOf(project, scene, t); return corners(layer, tr, size).map(function (p) { return toView(cam, p); }); }
+  function viewPoint(project, scene, t, pt) { return toView(cameraOf(project, scene, t), pt); }
+
   function hitTest(project, scene, t, px, py) {
+    var cam = cameraOf(project, scene, t), vx = px, vy = py;
+    if (cam) { var q = fromView(cam, { x: px, y: py }); px = q.x; py = q.y; }
     for (var i = scene.layers.length - 1; i >= 0; i--) {
       var L = scene.layers[i];
       if (L.locked || !M.layerVisibleAt(L, t, scene.duration)) continue;
       var size = layerSize(L, project), tr = transformAt(project, scene, L, t);
       if (tr.opacity <= 0.02) continue;
-      var lp = localPoint(L, tr, size, px, py);
+      var lp = localPoint(L, tr, size, L.hud ? vx : px, L.hud ? vy : py);
       if (!lp || lp.u < 0 || lp.u > 1 || lp.v < 0 || lp.v > 1) continue;
       if (L.type === "text") return L;
       var e = getEntry(M.frameAt(L, t));
@@ -177,6 +190,7 @@
       ctx.fillStyle = t.bubbleColor;
       var r = Math.min(lay.h / 2, t.size * 0.8);
       roundRect(ctx, ox, oy, lay.w, lay.h, r);
+      ctx.save(); ctx.shadowColor = "rgba(0,0,0,.28)"; ctx.shadowBlur = Math.max(6, t.size * 0.35); ctx.shadowOffsetY = Math.max(2, t.size * 0.08); ctx.fill(); ctx.restore();
       if (t.bubbleTail !== "none") {
         var tw = Math.min(lay.w * 0.3, t.size * 0.9), tx = t.bubbleTail === "left" ? ox + lay.w * 0.22 : ox + lay.w * 0.78;
         ctx.moveTo(tx - tw / 2, oy + lay.h - 1);
@@ -209,6 +223,11 @@
     var tr = transformAt(project, scene, layer, t);
     var alpha = tr.opacity * (alphaMul == null ? 1 : alphaMul);
     if (alpha <= 0.001) return;
+    if (layer.shadow && layer.type !== "text") {   // yere düşen yumuşak gölge; havalanınca küçülür
+      var gy = layer.shadow.y, lift = Math.max(0, gy - tr.y), f = Math.max(0.3, Math.min(1, 1 - lift / (project.height * 0.6)));
+      var rx = size.w * Math.abs(tr.sx) * 0.4 * f, ry = Math.max(3, rx * 0.2);
+      if (rx > 2) { ctx.save(); ctx.globalAlpha = 0.22 * Math.min(1, alpha); ctx.fillStyle = "#000"; ctx.beginPath(); ctx.ellipse(tr.x, gy, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+    }
     ctx.save();
     ctx.globalAlpha = Math.min(1, alpha);
     ctx.translate(tr.x, tr.y);
@@ -249,17 +268,25 @@
     var w = project.width, h = project.height;
     ctx.clearRect(0, 0, w, h);
     drawBackground(ctx, project, scene, !!opts.forExport);
+    var cam = cameraOf(project, scene, t);
+    ctx.save();
+    if (cam) { ctx.translate(w / 2, h / 2); ctx.scale(cam.zoom, cam.zoom); ctx.translate(-cam.cx, -cam.cy); }
     var i, L;
     if (opts.onion && !opts.forExport) {
       var step = 1 / project.fps;
       [t - step, t + step].forEach(function (tt) {
         if (tt < 0 || tt >= scene.duration) return;
-        for (i = 0; i < scene.layers.length; i++) { L = scene.layers[i]; if (M.layerVisibleAt(L, tt, scene.duration)) drawLayer(ctx, project, scene, L, tt, 0.25); }
+        for (i = 0; i < scene.layers.length; i++) { L = scene.layers[i]; if (!L.hud && M.layerVisibleAt(L, tt, scene.duration)) drawLayer(ctx, project, scene, L, tt, 0.25); }
       });
     }
     for (i = 0; i < scene.layers.length; i++) {
       L = scene.layers[i];
-      if (M.layerVisibleAt(L, t, scene.duration)) drawLayer(ctx, project, scene, L, t, 1);
+      if (!L.hud && M.layerVisibleAt(L, t, scene.duration)) drawLayer(ctx, project, scene, L, t, 1);
+    }
+    ctx.restore();
+    for (i = 0; i < scene.layers.length; i++) {   // ekran katmanları (alt yazı, sahne başlığı): kamera yakınlaşmasından etkilenmez
+      L = scene.layers[i];
+      if (L.hud && M.layerVisibleAt(L, t, scene.duration)) drawLayer(ctx, project, scene, L, t, 1);
     }
     if (opts.sceneIndex != null) {
       var a = transitionAlpha(project, opts.sceneIndex, t);
@@ -302,7 +329,7 @@
   root.Render = {
     loadAsset: loadAsset, ensureAssets: ensureAssets, getEntry: getEntry, dropAsset: dropAsset,
     layerSize: layerSize, textLayout: textLayout, layerCtx: layerCtx, transformAt: transformAt,
-    corners: corners, localPoint: localPoint, hitTest: hitTest,
+    corners: corners, localPoint: localPoint, hitTest: hitTest, cameraOf: cameraOf, toView: toView, fromView: fromView, viewCorners: viewCorners, viewPoint: viewPoint,
     drawBackground: drawBackground, drawLayer: drawLayer, drawScene: drawScene, transitionAlpha: transitionAlpha,
     thumbnail: thumbnail, invalidateThumbs: invalidateThumbs, roundRect: roundRect
   };

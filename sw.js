@@ -1,6 +1,6 @@
 /* Canlandır — çevrimdışı destek. Ağ önce, yoksa önbellek: güncellemeler hemen gelir, bağlantı yoksa uygulama yine açılır. */
-var VERSION = "canlandir-v4";
-var CORE = ["./", "./index.html", "./style.css", "./app.js", "./ui.js", "./easy.js", "./director.js", "./motion.js", "./model.js", "./render.js", "./demo.js", "./exporter.js",
+var VERSION = "canlandir-v5";
+var CORE = ["./", "./index.html", "./style.css", "./app.js", "./ui.js", "./easy.js", "./director.js", "./characters.js", "./sfx.js", "./motion.js", "./model.js", "./render.js", "./demo.js", "./exporter.js",
   "./lib/zip.js", "./lib/gif-encoder.js", "./lib/gif-worker.js", "./lib/webm-fix.js", "./lib/mp4-muxer.js", "./favicon.svg", "./manifest.webmanifest"];
 self.addEventListener("install", function (e) {
   self.skipWaiting();

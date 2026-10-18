@@ -39,12 +39,14 @@
       id: M.uid("sc"), name: name || "Sahne", duration: duration || 4,
       background: newBackground(),
       transition: { type: "none", duration: 0.5 },
+      camera: newCamera(), sfx: [],
       layers: []
     };
   }
+  function newCamera() { return { base: { zoom: 1, x: 0.5, y: 0.5 }, tracks: { zoom: [], x: [], y: [] } }; }
 
   function newScript() {
-    return { text: "", cast: [], backgrounds: [], settings: { charHeight: 0.42, speed: "normal", bubbleStyle: "white", titleCard: true, endCard: true, headings: true, fade: true } };
+    return { text: "", cast: [], backgrounds: [], settings: { charHeight: 0.42, speed: "normal", bubbleStyle: "white", titleCard: true, endCard: true, headings: true, fade: true, sfx: true } };
   }
 
   function newProject(opts) {
@@ -78,7 +80,7 @@
       anchor: Object.assign({ x: 0.5, y: 0.5 }, opts.anchor || {}),
       flipX: false, flipY: false,
       inPoint: opts.inPoint || 0, outPoint: opts.outPoint == null ? null : opts.outPoint,
-      effects: [], frameSets: []
+      effects: [], frameSets: [], shadow: null, hud: false
     };
     return L;
   }
@@ -126,6 +128,8 @@
     L.flipX = bool(raw.flipX, false); L.flipY = bool(raw.flipY, false);
     L.inPoint = num(raw.inPoint, 0, 0);
     L.outPoint = raw.outPoint == null ? null : num(raw.outPoint, null, 0);
+    L.shadow = (raw.shadow && typeof raw.shadow === "object") ? { y: num(raw.shadow.y, 0) } : null;
+    L.hud = bool(raw.hud, false);   // ekran katmanı: kameradan etkilenmez (alt yazı, başlık)
     L.frameSets = [];
     if (Array.isArray(raw.frameSets)) raw.frameSets.forEach(function (fs) {
       if (!fs || !Array.isArray(fs.frames)) return;
@@ -182,6 +186,11 @@
       if (sc.background.type === "image" && !sc.background.assetId) sc.background.type = "color";
       var trn = s.transition || {};
       sc.transition = { type: oneOf(trn.type, ["none", "fade"], "none"), duration: num(trn.duration, 0.5, 0.1, 5) };
+      var cam = s.camera || {}, cb = cam.base || {}, ct = cam.tracks || {};
+      sc.camera = { base: { zoom: num(cb.zoom, 1, 0.2, 6), x: num(cb.x, 0.5, -1, 2), y: num(cb.y, 0.5, -1, 2) },
+        tracks: { zoom: normalizeTrack(ct.zoom), x: normalizeTrack(ct.x), y: normalizeTrack(ct.y) } };
+      sc.sfx = [];
+      if (Array.isArray(s.sfx)) s.sfx.forEach(function (q) { if (q && Number.isFinite(+q.t) && typeof q.type === "string") sc.sfx.push({ t: Math.max(0, +q.t), type: q.type.slice(0, 20) }); });
       if (Array.isArray(s.layers)) s.layers.forEach(function (l) { var L = normalizeLayer(l, p.assets); if (L) sc.layers.push(L); });
       p.scenes.push(sc);
     });
@@ -190,7 +199,7 @@
     return p;
   }
 
-  var CAST_ROLES = ["pose", "talk", "walk", "mutlu", "uzgun", "kizgin", "saskin", "korkmus"];
+  var CAST_ROLES = ["pose", "talk", "walk", "blink", "mutlu", "uzgun", "kizgin", "saskin", "korkmus"];
   function normalizeScript(raw, assets) {
     var sc = newScript();
     if (!raw || typeof raw !== "object") return sc;
@@ -199,7 +208,7 @@
       if (!c || typeof c.name !== "string" || !c.name.trim()) return;
       var images = [];
       if (Array.isArray(c.images)) c.images.forEach(function (im) { if (im && typeof im.assetId === "string" && assets[im.assetId]) images.push({ assetId: im.assetId, role: oneOf(im.role, CAST_ROLES, "pose") }); });
-      sc.cast.push({ id: typeof c.id === "string" ? c.id : M.uid("ch"), name: c.name.trim().slice(0, 40), facing: oneOf(c.facing, ["right", "left"], "right"), images: images });
+      sc.cast.push({ id: typeof c.id === "string" ? c.id : M.uid("ch"), name: c.name.trim().slice(0, 40), facing: oneOf(c.facing, ["right", "left"], "right"), images: images, size: num(c.size, 1, 0.25, 3) });
     });
     if (Array.isArray(raw.backgrounds)) raw.backgrounds.forEach(function (b) {
       if (!b || typeof b.assetId !== "string" || !assets[b.assetId]) return;
@@ -209,7 +218,7 @@
     sc.settings = {
       charHeight: num(st.charHeight, 0.42, 0.15, 0.8), speed: oneOf(st.speed, ["slow", "normal", "fast"], "normal"),
       bubbleStyle: oneOf(st.bubbleStyle, ["white", "color"], "white"), titleCard: bool(st.titleCard, true), endCard: bool(st.endCard, true),
-      headings: bool(st.headings, true), fade: bool(st.fade, true)
+      headings: bool(st.headings, true), fade: bool(st.fade, true), sfx: bool(st.sfx, true)
     };
     return sc;
   }
@@ -254,7 +263,7 @@
 
   root.Model = {
     VERSION: VERSION, STAGE_PRESETS: STAGE_PRESETS, FONTS: FONTS,
-    newProject: newProject, newScene: newScene, newLayer: newLayer, newText: newText, newScript: newScript, CAST_ROLES: CAST_ROLES,
+    newProject: newProject, newScene: newScene, newLayer: newLayer, newText: newText, newScript: newScript, newCamera: newCamera, CAST_ROLES: CAST_ROLES,
     normalizeProject: normalizeProject, cloneLayer: cloneLayer, cloneScene: cloneScene, deepClone: deepClone,
     usedAssetIds: usedAssetIds, pruneAssets: pruneAssets
   };

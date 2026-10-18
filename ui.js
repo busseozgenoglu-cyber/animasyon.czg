@@ -347,6 +347,19 @@
       selectField("Sahne sonunda", [{ value: "none", label: "Doğrudan kes" }, { value: "fade", label: "Siyaha geçiş" }], trn.type, function (v) { trn.type = v; App.commit(); App.markDirty(); UI.renderProps(); }),
       trn.type === "fade" ? numField("Geçiş süresi", { value: trn.duration, unit: "sn", attrs: { min: "0.1", max: "5", step: "0.1" }, onChange: function (v) { trn.duration = Math.max(0.1, Math.min(5, v)); App.commit(); App.markDirty(); } }) : null
     ]));
+    var camHere = App.cameraHasKeyAt(App.S.time), camKeys = App.cameraKeyTimes().length;
+    function camLive(prop, scale) { return function (v) { var created = App.setCameraProp(prop, v / scale); App.markDirty(); if (created) UI.renderTimeline(); }; }
+    function camCommit() { return function () { App.commit(); UI.renderTimeline(); }; }
+    box.appendChild(section("camera", "Kamera", [
+      h("div", { class: "grid3" },
+        numField("Yakınlaştırma", { bind: "cam.zoom", value: Math.round(App.cameraValue("zoom") * 100), unit: "%", attrs: { min: "20", max: "600", step: "5" }, onInput: camLive("zoom", 100), onChange: camCommit() }),
+        numField("Merkez X", { bind: "cam.x", value: Math.round(App.cameraValue("x") * 100), unit: "%", attrs: { step: "1" }, onInput: camLive("x", 100), onChange: camCommit() }),
+        numField("Merkez Y", { bind: "cam.y", value: Math.round(App.cameraValue("y") * 100), unit: "%", attrs: { step: "1" }, onInput: camLive("y", 100), onChange: camCommit() })),
+      h("div", { class: "row" },
+        h("button", { type: "button", class: "keybtn" + (camHere ? " on" : ""), title: camHere ? "Bu karedeki kamera anahtarını kaldır" : "Bu kareye kamera anahtarı ekle", onclick: function () { App.toggleCameraKey(App.S.time); } }, "◆"),
+        h("span", { style: "flex:1;font-size:12px" }, camKeys ? camKeys + " kamera anahtarı (zaman çizelgesinde 🎥 satırı)" : "Yakın çekim için: zamanı seç, değerleri gir, ◆'a bas"),
+        camKeys ? h("button", { type: "button", class: "small danger", onclick: function () { App.resetCamera(); } }, "Sıfırla") : null)
+    ]));
     var idx = App.S.sceneIndex, n = p.scenes.length;
     box.appendChild(section("scenes", "Sahneler (" + n + ")", [
       h("div", { class: "pill-row" },
@@ -362,7 +375,13 @@
   /* Oynatma kafası hareket edince sayısal alanları tazeler (odaktaki alan hariç) */
   UI.syncProps = function () {
     var App = root.App, L = App.selLayer();
-    if (!L) return;
+    if (!L) {
+      var camInputs = $("props").querySelectorAll("[data-bind^='cam.']");
+      for (var ci = 0; ci < camInputs.length; ci++) { var cinp = camInputs[ci], cp = cinp.getAttribute("data-bind").slice(4); if (document.activeElement !== cinp) { var cv = Math.round(App.cameraValue(cp) * 100); if (String(cinp.value) !== String(cv)) cinp.value = cv; } }
+      var ckb = $("props").querySelector(".keybtn");
+      if (ckb && camInputs.length && ckb.classList.contains("on") !== App.cameraHasKeyAt(App.S.time)) UI.renderProps();
+      return;
+    }
     var size = R.layerSize(L, App.S.project);
     var vals = {
       x: Math.round(App.editValue(L, "x")), y: Math.round(App.editValue(L, "y")),
@@ -400,6 +419,12 @@
     rows.innerHTML = "";
     drawRuler(W, pxs, sc.duration, p.fps);
     if (!sc.layers.length) rows.appendChild(h("div", { class: "tl-empty" }, "Katman ekleyin; görünme süreleri (çubuk), anahtar kareler (◆) ve efekt pencereleri (sarı çizgi) burada görünür."));
+    var camTimes = App.cameraKeyTimes();
+    if (camTimes.length) {
+      var camArea = h("div", { class: "tl-track-area", style: "width:" + W + "px", "data-layer": "__camera__" });
+      camTimes.forEach(function (kt) { camArea.appendChild(h("div", { class: "tl-key", style: "left:" + (kt * pxs) + "px", "data-key": kt, "data-layer": "__camera__", title: "Kamera anahtarı · " + fmtTime(kt) + " (sürükle: taşı)" })); });
+      rows.appendChild(h("div", { class: "tl-row cam" }, h("div", { class: "tl-name", title: "Kamera", onclick: function () { App.selectLayer(null); } }, "🎥 Kamera"), camArea));
+    }
     for (var i = sc.layers.length - 1; i >= 0; i--) {
       (function (L) {
         var sel = L.id === App.S.sel.layerId;
@@ -482,7 +507,11 @@
       if (ev.button !== 0) return;
       var key = ev.target.closest(".tl-key"), edge = ev.target.closest(".edge"), clip = ev.target.closest(".tl-clip");
       var area = ev.target.closest(".tl-track-area"), ruler = ev.target.closest("#rulerArea");
-      if (key) {
+      if (key && key.getAttribute("data-layer") === "__camera__") {
+        var tc = parseFloat(key.getAttribute("data-key"));
+        App.selectLayer(null); App.setTime(tc);
+        drag = { kind: "camkey", t0: tc, cur: tc, x0: ev.clientX, moved: false };
+      } else if (key) {
         var L = App.layerById(key.getAttribute("data-layer")), t0 = parseFloat(key.getAttribute("data-key"));
         App.selectKey(L.id, t0);
         drag = { kind: "key", layer: L, t0: t0, cur: t0, x0: ev.clientX, moved: false };
@@ -512,6 +541,11 @@
       if (Math.abs(ev.clientX - drag.x0) > 3) drag.moved = true;
       if (!drag.moved) return;
       var L = drag.layer;
+      if (drag.kind === "camkey") {
+        var ntc = Math.max(0, Math.round((drag.t0 + dt) * fps) / fps);
+        if (ntc !== drag.cur) { App2.moveCameraKeys(drag.cur, ntc); drag.cur = ntc; App2.setTime(ntc); UI.renderTimeline(); }
+        return;
+      }
       if (drag.kind === "key") {
         var nt = Math.max(0, Math.round((drag.t0 + dt) * fps) / fps);
         if (nt !== drag.cur) { M.moveKeys(L, drag.cur, nt); drag.cur = nt; App2.S.sel.keyTime = nt; App2.setTime(nt); UI.renderTimeline(); }
@@ -700,7 +734,7 @@
   }
 
   /* ── Senaryodan film üretme penceresi ─────────────────────── */
-  var ROLE_LABELS = [["pose", "Duruş"], ["talk", "Konuşma karesi"], ["walk", "Yürüme karesi"], ["mutlu", "Mutlu"], ["uzgun", "Üzgün"], ["kizgin", "Kızgın"], ["saskin", "Şaşkın"], ["korkmus", "Korkmuş"]];
+  var ROLE_LABELS = [["pose", "Duruş"], ["talk", "Konuşma karesi"], ["walk", "Yürüme karesi"], ["blink", "Göz kırpma"], ["mutlu", "Mutlu"], ["uzgun", "Üzgün"], ["kizgin", "Kızgın"], ["saskin", "Şaşkın"], ["korkmus", "Korkmuş"]];
   var previewTimer = 0;
 
   UI.openScript = function () {
@@ -725,6 +759,7 @@
       var facing = h("select", { title: "Görselde karakterin yüzü hangi yöne bakıyor?", onchange: function () { c.facing = facing.value; App.commit(); } },
         h("option", { value: "right", text: "Yüzü sağa" }), h("option", { value: "left", text: "Yüzü sola" }));
       facing.value = c.facing || "right";
+      var sizeSel = UI.sizeSelect(c, function () { App.commit(); });
       var imgs = h("div", { class: "sc-imgs" });
       c.images.forEach(function (im) {
         var a = p.assets[im.assetId]; if (!a) return;
@@ -736,7 +771,7 @@
       });
       imgs.appendChild(h("button", { type: "button", class: "small", style: "align-self:flex-start", onclick: function () { App.pickCastImages(c.id); } }, "+ Görsel"));
       cast.appendChild(h("div", { class: "sc-char" },
-        h("div", { class: "sc-char-head" }, thumb, nameInp, facing, h("button", { type: "button", class: "small danger", title: "Karakteri sil", onclick: function () { App.removeCastMember(c.id); } }, "✕")),
+        h("div", { class: "sc-char-head" }, thumb, nameInp, facing, sizeSel, h("button", { type: "button", class: "small danger", title: "Karakteri sil", onclick: function () { App.removeCastMember(c.id); } }, "✕")),
         imgs));
     });
     var bgs = $("scBgs"); bgs.innerHTML = "";
@@ -819,5 +854,47 @@
     box.insertBefore(h("ul", { class: "warn" }, warnings.slice(0, 12).map(function (w) { return h("li", null, w); })), box.firstChild);
   };
 
-  UI.init = function () { bindTimeline(); bindDialogs(); bindLeftPanel(); bindLayoutPrefs(); bindScriptDialog(); };
+  /* ── Hazır karakter galerisi ─────────────────────────────── */
+  var gallerySel = {}, galleryDone = null;
+  /* Karakter boyu seçici (stüdyo ve sihirbaz kartları) */
+  var SIZES = [[0.5, "Minik"], [0.62, "Evcil hayvan"], [0.75, "Küçük"], [0.86, "Çocuk"], [1, "Normal boy"], [1.2, "Uzun"], [1.5, "Dev"]];
+  UI.sizeSelect = function (c, onChange, className) {
+    var sel = h("select", { class: className || "", title: "Sahnedeki boyu (diğer karakterlere göre)", onchange: function () { c.size = parseFloat(sel.value) || 1; onChange(); } });
+    var cur = c.size > 0 ? c.size : 1, hit = null;
+    SIZES.forEach(function (s) { if (Math.abs(s[0] - cur) < 0.005) hit = s[0]; });
+    if (hit == null) sel.appendChild(h("option", { value: String(cur), text: "Boy %" + Math.round(cur * 100) }));
+    SIZES.forEach(function (s) { sel.appendChild(h("option", { value: String(s[0]), text: s[1] })); });
+    sel.value = String(hit == null ? cur : hit);
+    return sel;
+  };
+  UI.openGallery = function (onDone) {
+    var C = root.Characters; if (!C) return;
+    galleryDone = onDone || null; gallerySel = {};
+    var grid = $("galleryGrid"); grid.innerHTML = "";
+    C.LIST.forEach(function (e) {
+      var item = h("div", { class: "gal-item", role: "button", tabindex: "0", onclick: function () { gallerySel[e.id] = !gallerySel[e.id]; item.classList.toggle("on", !!gallerySel[e.id]); updateCount(); },
+        onkeydown: function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); item.click(); } } },
+        h("img", { src: C.thumb(e.id), alt: e.name }), h("b", null, e.name), h("small", null, e.desc));
+      grid.appendChild(item);
+    });
+    function updateCount() { var n = Object.keys(gallerySel).filter(function (k) { return gallerySel[k]; }).length; $("galleryCount").textContent = n ? n + " karakter seçildi" : "Tıklayarak seç (birden çok olabilir)"; $("galleryAdd").disabled = !n; }
+    updateCount();
+    $("galleryDialog").showModal();
+  };
+  function bindGallery() {
+    var App = root.App;
+    $("galleryAdd").addEventListener("click", function () {
+      var ids = Object.keys(gallerySel).filter(function (k) { return gallerySel[k]; });
+      if (!ids.length) return;
+      $("galleryAdd").disabled = true;
+      App.addLibraryCast(ids).then(function (added) {
+        $("galleryDialog").close();
+        App.toast(added.length ? added.length + " karakter eklendi" : "Bu karakterler zaten listede");
+        if (galleryDone) galleryDone(added);
+      });
+    });
+    $("scGallery").addEventListener("click", function () { UI.openGallery(function () { UI.renderScriptDialog(); }); });
+  }
+
+  UI.init = function () { bindTimeline(); bindDialogs(); bindLeftPanel(); bindLayoutPrefs(); bindScriptDialog(); bindGallery(); };
 })(window);

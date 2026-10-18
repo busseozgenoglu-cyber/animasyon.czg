@@ -213,8 +213,9 @@
     var sup = recorderSupport();
     if (opts.format === "mp4") {
       return webcodecsSupport(project).then(function (codec) {
-        // Ses varsa ve tarayıcı sesli MP4 kaydedebiliyorsa gerçek zamanlı kayıt; yoksa hızlı WebCodecs yolu
-        if (codec && !(project.audio && sup.mp4)) return exportMp4WebCodecs(project, opts, onProgress, ctl);
+        // Ses (müzik ya da efekt) varsa ve tarayıcı sesli MP4 kaydedebiliyorsa gerçek zamanlı kayıt; yoksa hızlı WebCodecs yolu
+        var hasAudio = !!project.audio || (root.Sfx && root.Sfx.cues(project, 0, Infinity).length > 0);
+        if (codec && !(hasAudio && sup.mp4)) return exportMp4WebCodecs(project, opts, onProgress, ctl);
         if (sup.mp4) return exportVideoRecorder(project, opts, onProgress, ctl);
         throw new Error("Bu tarayıcı MP4 (H.264) üretemiyor. WebM seçin ya da Chrome/Edge/Safari kullanın.");
       });
@@ -245,20 +246,23 @@
           else if (typeof stream.requestFrame === "function") stream.requestFrame();
         }
 
-        var audioReady = Promise.resolve();
-        if (project.audio && sup.audio) {
+        var audioReady = Promise.resolve(), sfxCues = root.Sfx ? root.Sfx.cues(project, r.start, r.end) : [], sfxDest = null;
+        if ((project.audio || sfxCues.length) && sup.audio) {
           try {
             audioCtx = new AudioContext();
             var dest = audioCtx.createMediaStreamDestination();
-            var gain = audioCtx.createGain();
-            gain.gain.value = project.audio.volume == null ? 1 : project.audio.volume;
-            gain.connect(dest);
+            sfxDest = dest;
             dest.stream.getAudioTracks().forEach(function (t) { stream.addTrack(t); });
-            audioReady = audioCtx.decodeAudioData(dataUrlToArrayBuffer(project.audio.dataUrl)).then(function (buffer) {
-              source = audioCtx.createBufferSource();
-              source.buffer = buffer;
-              source.connect(gain);
-            }).catch(function () { source = null; });
+            if (project.audio) {
+              var gain = audioCtx.createGain();
+              gain.gain.value = project.audio.volume == null ? 1 : project.audio.volume;
+              gain.connect(dest);
+              audioReady = audioCtx.decodeAudioData(dataUrlToArrayBuffer(project.audio.dataUrl)).then(function (buffer) {
+                source = audioCtx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(gain);
+              }).catch(function () { source = null; });
+            }
           } catch (e) { audioCtx = null; }
         }
 
@@ -290,12 +294,15 @@
           rec.start(1000);
           var frameMs = 1000 / fps;
           var start = performance.now() + 40;
-          if (source) {
-            try {
-              var when = audioCtx.currentTime + 0.04;
-              var offset = r.start, dur = r.end - r.start;
-              if (offset < source.buffer.duration) source.start(when, offset, Math.min(dur, source.buffer.duration - offset));
-            } catch (e) { /* ses olmadan devam */ }
+          if (audioCtx) {
+            var when = audioCtx.currentTime + 0.04;
+            if (source) {
+              try {
+                var offset = r.start, dur = r.end - r.start;
+                if (offset < source.buffer.duration) source.start(when, offset, Math.min(dur, source.buffer.duration - offset));
+              } catch (e) { /* ses olmadan devam */ }
+            }
+            if (sfxCues.length && sfxDest) { try { root.Sfx.schedule(audioCtx, sfxDest, sfxCues, r.start, when, 0.45); } catch (e) { /* efektsiz devam */ } }
           }
           var i = 0;
           function loop() {

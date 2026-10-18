@@ -64,6 +64,7 @@
       if (/^[^:()]{1,40}?\s*(?:\([^)]{0,80}\))?\s*:\s*$/.test(line)) return;   // henüz yazılmamış replik ("ALİ: ") atlanır
       if ((m = line.match(/^([^:()]{1,40}?)\s*(?:\(([^)]{1,80})\))?\s*:\s*(.+)$/))) {
         var who = m[1].trim(), whoN = norm(who);
+        if (/^(kamera|yakin cekim|yakin plan|genis plan|cekim)$/.test(whoN)) { scene.items.push({ type: "action", text: line, line: li + 1 }); return; }
         if (!/^\d+$/.test(who) && who.split(/\s+/).length <= 4 && !/^(http|https|saat|not)$/i.test(who) && /[a-zçğıöşü]/i.test(who)) {
           var txt = m[3].trim(), emo = (m[2] || "").trim();
           if (NARRATORS.test(whoN)) scene.items.push({ type: "narration", text: txt, line: li + 1 });
@@ -82,6 +83,7 @@
     ["hug", /\b(sarilir|sarildi|kucaklar|kucakladi|sarilarak)\b/],
     ["back", /\b(geri cekilir|geri cekildi|gerisin geri|geri adim atar|bir adim geri|geriler|geriledi)\b/],
     ["wake", /\b(uyanir|uyandi|gozlerini acar|uykudan kalkar)\b/],
+    ["bark", /\b(havlar|havladi|havliyor|hav hav|miyavlar|miyavladi|miyavliyor|civildar|civildadi|cik cik|kukrer|kukredi|bogurur)\b/],
     ["walk_to", /\b(yanina (gider|gelir|gitti|geldi|yurur|kosar|yaklasir)|dogru (gider|yurur|kosar|ilerler|yaklasir|gitti|yurudu|kostu)|yaklasir|yaklasti|yaklasiyor)\b/],
     ["enter", /\b(girer|girdi|giriyor|gelir|geldi|geliyor|ortaya cikar|belirir|belirdi|gorunur|gorundu|iceri girer|sahneye girer)\b/],
     ["exit", /\b(cikar|cikti|cikiyor|gider|gitti|gidiyor|ayrilir|ayrildi|uzaklasir|uzaklasti|kacar|kacti|kaybolur|kayboldu|yok olur|terk eder|sahneden cikar)\b/],
@@ -93,7 +95,7 @@
     ["rise", /\b(kalkar|kalkti|ayaga kalkar|dogrulur|dogruldu|toparlanir)\b/],
     ["fly", /\b(ucar|uctu|ucuyor|havalanir|havalandi|yukselir|yukseldi|havaya kalkar)\b/],
     ["land", /\b(iner|indi|konar|kondu|yere iner)\b/],
-    ["wave", /\b(el sallar|el salladi|selam verir|selam verdi|selamlar|selamladi|elini sallar)\b/],
+    ["wave", /\b(el sallar|el salladi|selam verir|selam verdi|selamlar|selamladi|elini sallar|kuyruk sallar|kuyrugunu sallar)\b/],
     ["laugh", /\b(guler|guldu|guluyor|gulumser|gulumsedi|sevinir|sevindi|kahkaha|kikirdar)\b/],
     ["cry", /\b(aglar|agladi|agliyor|uzulur|uzuldu|hickirir|burnunu ceker|gozyasi)\b/],
     ["angry", /\b(kizar|kizdi|sinirlenir|sinirlendi|bagirir|bagirdi|ofkelenir|homurdanir|kopurur)\b/],
@@ -151,6 +153,14 @@
       });
     });
     var all = /\b(herkes|hepsi|ikisi|ucu|dordu|butun|tumu|beraber|birlikte)\b/.test(n);
+    var to0 = /\bsaga\b/.test(n) ? "right" : /\bsola\b/.test(n) ? "left" : null;
+    var sec0 = n.match(/(\d+(?:[.,]\d+)?)\s*(saniye|sn)\b/);
+    /* Kamera ipuçları: "Kamera Ayşe'ye yaklaşır.", "Kamera uzaklaşır.", "Kamera sağa kayar.", "Yakın çekim: Ali" */
+    if (/^kamera\b/.test(n) || /\b(yakin|genis) (cekim|plan)\b/.test(n)) {
+      var cam = /uzaklas|genis|geri cek|acil|uzak plan|genel plan/.test(n) ? "cam_out" : (to0 && /kay|pan|doner|cevril|kaydir/.test(n)) ? "cam_pan" : "cam_in";
+      return { act: cam, camera: true, subjects: [], all: false, target: found[0] || null, dir: null, to: to0, speed: "normal",
+        seconds: sec0 ? parseFloat(sec0[1].replace(",", ".")) : null, emotion: "", simultaneous: /\b(ayni anda|bu sirada|o sirada|ayni zamanda)\b/.test(n) };
+    }
     var act = null;
     for (var i = 0; i < ACTIONS.length; i++) if (ACTIONS[i][1].test(n)) { act = ACTIONS[i][0]; break; }
     var dir = /\bsagdan\b/.test(n) ? "right" : /\bsoldan\b/.test(n) ? "left" : /\byukaridan|gokten|yukardan\b/.test(n) ? "top" : /\basagidan|alttan|yerden\b/.test(n) ? "bottom" : null;
@@ -170,7 +180,7 @@
   function analyze(text, castNames) {
     var ast = parse(text), names = (castNames || []).slice();
     ast.speakers.forEach(function (s) { if (names.map(norm).indexOf(norm(s)) < 0) names.push(s); });
-    var stats = { scenes: ast.scenes.length, lines: 0, actions: 0, narrations: 0, seconds: 0, unknownActions: [], charactersWithoutImage: [], candidates: [] };
+    var stats = { scenes: ast.scenes.length, lines: 0, actions: 0, narrations: 0, seconds: 0, unknownActions: [], charactersWithoutImage: [], candidates: [], autoNames: [] };
     ast.scenes.forEach(function (sc) {
       var last = [];
       stats.seconds += 1.5;
@@ -180,13 +190,17 @@
         else {
           stats.actions++;
           var a = analyzeAction(it.text, names, last);
+          if (!a.subjects.length && !a.all && a.act === "enter") {   // "Köpek sağdan girer." → Köpek bir karakterdir
+            var auto = candidateName(it.text);
+            if (auto && names.map(norm).indexOf(norm(auto)) < 0) { names.push(auto); stats.autoNames.push(auto); a = analyzeAction(it.text, names, last); }
+          }
           if (a.subjects.length) last = a.subjects;
           if (!a.act) stats.unknownActions.push(it.text);
-          if (!a.subjects.length && !a.all && a.act !== "wait") {
+          if (!a.subjects.length && !a.all && a.act !== "wait" && !a.camera) {
             var cand = candidateName(it.text);
             if (cand && names.map(norm).indexOf(norm(cand)) < 0 && stats.candidates.indexOf(cand) < 0 && stats.candidates.length < 5) stats.candidates.push(cand);
           }
-          stats.seconds += a.seconds || ACTION_DUR[a.act] || 1.2;
+          stats.seconds += (a.seconds || ACTION_DUR[a.act] || 1.2) * (a.camera ? 0.5 : 1);
         }
       });
     });
@@ -199,7 +213,7 @@
   function lineDuration(text, speed) { return Math.max(1.5, Math.min(8, 1.2 + String(text).length * (SPEED[speed] || SPEED.normal))); }
   var ACTION_DUR = { enter: 1.1, exit: 1.0, walk: 1.6, walk_to: 1.6, run: 1.0, jump: 1.6, spin: 1.0, turn: 0.4, fall: 0.8, rise: 0.6, fly: 1.4, land: 1.0, wave: 1.4,
     laugh: 1.2, cry: 1.6, angry: 1.4, surprise: 1.0, fear: 1.5, dance: 2.4, sit: 0.6, sleep: 1.5, think: 1.6, look: 0.5, grow: 0.9, shrink: 0.9, nod: 1.0, shake_head: 1.0, hide: 0.6, wait: 1.2,
-    hug: 1.6, back: 0.8, wake: 0.9, lie: 0.8, clap: 1.2, sing: 2.4, slide: 1.2, swim: 2.0, yawn: 1.4, throw: 0.7, catch: 0.6 };
+    hug: 1.6, back: 0.8, wake: 0.9, lie: 0.8, clap: 1.2, sing: 2.4, slide: 1.2, swim: 2.0, yawn: 1.4, throw: 0.7, catch: 0.6, bark: 1.2, cam_in: 1.0, cam_out: 1.0, cam_pan: 1.2 };
   var STOP_WORDS = /^(o|bu|su|sonra|ardindan|birden|aniden|hemen|ve|ama|fakat|derken|herkes|hepsi|ikisi|biraz|yavasca|hizla|once|simdi|iste|tam|bir|kisa|uzun|sahne|kamera|muzik|ses|isik)$/;
   /* Öznesi anlaşılmayan eylemin ilk sözcüğü karakter adayıdır ("Köpek havlar." → Köpek) */
   function candidateName(text) {
@@ -373,24 +387,43 @@
     }
 
     /* Karakter tablosu: görseller, yüz yönü */
-    var cast = {};
-    script.cast.forEach(function (c) {
-      var imgs = (c.images || []).filter(function (im) { return project.assets[im.assetId]; });
-      if (!imgs.length) return;
+    var cast = {}, castUsed = {};
+    function castDef(name, imgs, facing, size) {
       var byRole = {};
       imgs.forEach(function (im) { (byRole[im.role || "pose"] = byRole[im.role || "pose"] || []).push(im.assetId); });
       var pose = (byRole.pose || [])[0] || imgs[0].assetId;
-      cast[norm(c.name)] = { name: c.name, pose: pose, talk: byRole.talk || [], walk: byRole.walk || [], emotions: {
+      return { name: name, pose: pose, talk: byRole.talk || [], walk: byRole.walk || [], blink: byRole.blink || [], emotions: {
         mutlu: (byRole.mutlu || [])[0], uzgun: (byRole.uzgun || [])[0], kizgin: (byRole.kizgin || [])[0], saskin: (byRole.saskin || [])[0], korkmus: (byRole.korkmus || [])[0] },
-        facing: c.facing === "left" ? -1 : 1 };
+        facing: facing === "left" ? -1 : 1, size: (size > 0 ? size : 1) };
+    }
+    script.cast.forEach(function (c) {
+      var imgs = (c.images || []).filter(function (im) { return project.assets[im.assetId]; });
+      imgs.forEach(function (im) { castUsed[im.assetId] = true; });
+      if (!imgs.length) return;
+      cast[norm(c.name)] = castDef(c.name, imgs, c.facing, c.size);
     });
+    /* Görseli olmayan karakterler: kütüphaneden (ada göre eşleşen ya da isim etiketli rastgele) çizilir; kütüphane yoksa yer tutucu */
+    var Lib = root.Characters;
     res.names.forEach(function (nm) {
       if (cast[norm(nm)]) return;
-      var pose = genAsset("ph:" + norm(nm) + ":pose", nm + " (yer tutucu).png", function () { return drawPlaceholder(nm, "pose"); });
-      var talk = genAsset("ph:" + norm(nm) + ":talk", nm + " (konuşma).png", function () { return drawPlaceholder(nm, "talk"); });
-      var walk = genAsset("ph:" + norm(nm) + ":walk", nm + " (yürüme).png", function () { return drawPlaceholder(nm, "walk"); });
-      cast[norm(nm)] = { name: nm, pose: pose, talk: [talk], walk: [walk], emotions: {}, facing: 1, placeholder: true };
-      warnings.push("“" + nm + "” için görsel yüklenmedi; renkli bir yer tutucu karakter çizildi.");
+      var made = null;
+      if (Lib) {
+        try {
+          var entry = Lib.findByName(nm) || Lib.random(nm), gen = Lib.generate(project, entry, nm);
+          gen.images.forEach(function (im) { genUsed[im.assetId] = true; });
+          made = castDef(nm, gen.images, gen.facing, gen.size);
+          made.placeholder = !!entry.label;   // isim etiketli karakter aynalanmaz
+          warnings.push("“" + nm + "” için görsel yüklenmedi; kütüphaneden " + (entry.label ? "isim etiketli bir karakter" : "“" + entry.name + "”") + " çizildi.");
+        } catch (e) { made = null; }
+      }
+      if (!made) {
+        var pose = genAsset("ph:" + norm(nm) + ":pose", nm + " (yer tutucu).png", function () { return drawPlaceholder(nm, "pose"); });
+        var talk = genAsset("ph:" + norm(nm) + ":talk", nm + " (konuşma).png", function () { return drawPlaceholder(nm, "talk"); });
+        var walk = genAsset("ph:" + norm(nm) + ":walk", nm + " (yürüme).png", function () { return drawPlaceholder(nm, "walk"); });
+        made = { name: nm, pose: pose, talk: [talk], walk: [walk], blink: [], emotions: {}, facing: 1, placeholder: true, size: 1 };
+        warnings.push("“" + nm + "” için görsel yüklenmedi; renkli bir yer tutucu karakter çizildi.");
+      }
+      cast[norm(nm)] = made;
     });
     var names = Object.keys(cast).map(function (kk) { return cast[kk].name; });
 
@@ -449,6 +482,7 @@
         fx(by, "fadeIn", 0.8, 1.4); fx(by, "fadeOut", 2.5, 3);
         ts.layers.push(by);
       }
+      if (settings.sfx !== false) ts.sfx.push({ t: 0.15, type: "chime" });
       fade(ts);
       scenes.push(ts);
     }
@@ -488,24 +522,38 @@
           if (a.subjects.length) last = a.subjects;
         }
       });
-      var n = order.length, slots = n <= 1 ? [0.5] : n === 2 ? [0.33, 0.67] : n === 3 ? [0.2, 0.5, 0.8] : n === 4 ? [0.15, 0.38, 0.62, 0.85] : order.map(function (_, i) { return 0.12 + 0.76 * i / (n - 1); });
-      var free = slots.slice(), chars = {};
-      order.forEach(function (kn) {
-        var info = firstInfo[kn], pick;
+      /* Kalabalık: karakter sayısı arttıkça ölçek küçülür; sığmayınca ikinci (arka) sıra açılır */
+      var n = order.length;
+      var avgAspect = n ? order.reduce(function (s, kn) { var a = project.assets[cast[kn].pose]; return s + (a ? a.width / a.height : 0.7) * cast[kn].size; }, 0) / n : 0.7;
+      var natW = avgAspect * charH, perSlot = W * 0.82 / Math.max(1, n);
+      var crowd = Math.max(0.6, Math.min(1, perSlot / (natW * 1.1)));
+      var twoRows = n >= 4 && crowd < 0.8, nFront = n;
+      if (twoRows) { nFront = Math.ceil(n / 2); perSlot = W * 0.82 / nFront; crowd = Math.max(0.62, Math.min(0.92, perSlot / (natW * 1.1))); }
+      function spread(count, lo, hi) { if (count <= 1) return [0.5]; var out = []; for (var i = 0; i < count; i++) out.push(lo + (hi - lo) * i / (count - 1)); return out; }
+      var frontSlots = twoRows ? spread(nFront, 0.14, 0.86) : (n <= 1 ? [0.5] : n === 2 ? [0.33, 0.67] : n === 3 ? [0.2, 0.5, 0.8] : spread(n, 0.12, 0.88));
+      var backSlots = twoRows ? spread(n - nFront, n - nFront <= 2 ? 0.3 : 0.22, n - nFront <= 2 ? 0.7 : 0.78) : [];
+      var freeRows = [frontSlots.slice(), backSlots.slice()], chars = {};
+      order.forEach(function (kn, oi) {
+        var info = firstInfo[kn], row = (twoRows && oi >= nFront) ? 1 : 0, free = freeRows[row], pick;
         if (info.enters && info.dir === "left") pick = free.shift();
         else if (info.enters && info.dir === "right") pick = free.pop();
         else { var bi = 0, bd = 9; free.forEach(function (s, i) { if (Math.abs(s - 0.5) < bd) { bd = Math.abs(s - 0.5); bi = i; } }); pick = free.splice(bi, 1)[0]; }
-        chars[kn] = { def: cast[kn], slotX: Math.round(pick * W), x: Math.round(pick * W), layer: null, facing: 0, present: false, fallen: false, flying: false, fl: null, sitting: false };
+        if (pick == null) pick = 0.5;
+        chars[kn] = { def: cast[kn], slotX: Math.round(pick * W), x: Math.round(pick * W), layer: null, layers: [], facing: 0, present: false, fallen: false, flying: false, fl: null, sitting: false,
+          row: row, ground: row ? groundY - Math.round(H * 0.07) : groundY, charH: charH * cast[kn].size * crowd * (row ? 0.85 : 1) };
       });
+      var rowOf = new Map();
 
       function charLayer(kn) {
         var c = chars[kn];
         if (c.layer) return c.layer;
-        var def = c.def, a = project.assets[def.pose], s = charH / (a ? a.height : 300);
-        var L = Model.newLayer("image", { name: def.name, frames: [def.pose], base: { x: c.x, y: groundY, rot: 0, sx: s * def.facing, sy: s, opacity: 1 } });
+        var def = c.def, a = project.assets[def.pose], s = c.charH / (a ? a.height : 300);
+        var L = Model.newLayer("image", { name: def.name, frames: [def.pose], base: { x: c.x, y: c.ground, rot: 0, sx: s * def.facing, sy: s, opacity: 1 } });
         L.anchor = { x: 0.5, y: 1 };
         L.frameSets = [];
-        c.layer = L; c.scale = s; c.facing = def.facing;
+        L.shadow = { y: c.ground };
+        c.layer = L; c.layers.push(L); c.scale = s; c.facing = def.facing;
+        rowOf.set(L, c.row);
         var atCenter = c.x <= W / 2 ? 1 : -1;      // sahne ortasına dönük başlar
         setFacing(kn, atCenter, 0, true);
         sc.layers.push(L);
@@ -530,6 +578,28 @@
         return L;
       }
       function curX(kn, t) { var c = chars[kn]; if (!c.layer) return c.x; return M.trackValue(c.layer.tracks.x, t, c.layer.base.x); }
+      /* Ses ipucu (sahne zamanı) */
+      function cue(type, at) { if (settings.sfx === false) return; sc.sfx.push({ t: Math.max(0, Math.round(at * 1000) / 1000), type: type }); }
+      /* Kamera anahtarı: ilk anahtar sahne başında temel değeri sabitler */
+      function camKey(prop, at, v) { var tr = sc.camera.tracks[prop]; if (!tr.length && at > 1e-6) M.setKey(tr, 0, sc.camera.base[prop], "easeInOutQuad"); M.setKey(tr, at, v, "easeInOutQuad"); }
+      function cameraAct(a, start, dur, lastSpeaker) {
+        var cam = sc.camera, z0 = M.trackValue(cam.tracks.zoom, start, cam.base.zoom), x0 = M.trackValue(cam.tracks.x, start, cam.base.x), y0 = M.trackValue(cam.tracks.y, start, cam.base.y);
+        var z = z0, x = x0, y = y0;
+        if (a.act === "cam_out") { z = 1; x = 0.5; y = 0.5; }
+        else if (a.act === "cam_in") {
+          z = W < H ? 1.4 : 1.6;
+          var tk = a.target ? norm(a.target) : lastSpeaker;
+          if (tk && chars[tk]) { var c = chars[tk]; x = curX(tk, start + dur) / W; y = (c.ground - c.charH * 0.78) / H; }
+          else { x = 0.5; y = 0.42; }
+        } else {   // cam_pan
+          if (z0 <= 1.001) z = 1.25;
+          x = x0 + (a.to === "left" ? -0.15 : 0.15);
+        }
+        var hx = 0.5 / z, hy = 0.5 / z;
+        x = Math.max(hx, Math.min(1 - hx, x)); y = Math.max(hy, Math.min(1 - hy, y));
+        camKey("zoom", start, z0); camKey("x", start, x0); camKey("y", start, y0);
+        camKey("zoom", start + dur, z); camKey("x", start + dur, x); camKey("y", start + dur, y);
+      }
       function charW(kn) { var c = chars[kn], a = project.assets[c.def.pose]; return (a ? a.width : 240) * Math.abs(c.scale || 1); }
       function besideDist(kn, other, factor) { return (charW(kn) + charW(other)) / 2 * (factor || 1.05); }
       function moveTo(kn, nx, t0, dur, mode) {
@@ -566,7 +636,7 @@
         else if (emotion === "yorgun") { fx(L, "lean", a, b, { angle: -4, ramp: 0.6 }); }
       }
       function bubble(kn, text, a, b, emotion) {
-        var c = chars[kn], cx = curX(kn, a), headTop = groundY - charH;
+        var c = chars[kn], cx = curX(kn, a), headTop = c.ground - c.charH;
         var bubbleColor = settings.bubbleStyle === "color" ? hsl(hash(kn) % 360, 70, 90) : "#ffffff";
         var size = emotion === "fisilti" ? Math.round(bubbleFont * 0.85) : emotion === "kizgin" ? Math.round(bubbleFont * 1.12) : bubbleFont;
         var L = textLayer("Replik · " + c.def.name + ": " + text.slice(0, 22) + (text.length > 22 ? "…" : ""), text, {
@@ -582,6 +652,7 @@
         L.text.bubbleTail = cx <= bx ? "left" : "right";
         fx(L, "popIn", a, a + 0.28); fx(L, "fadeOut", Math.max(a + 0.3, b - 0.25), b);
         fx(L, "float", a, b, { strength: Math.round(3 * k), speed: 0.5, tilt: 0.6 });
+        cue("pop", a);
         sc.layers.push(L);
         return L;
       }
@@ -590,11 +661,12 @@
           base: { x: W / 2, y: H * 0.965, rot: 0, sx: 1, sy: 1, opacity: 1 },
           text: { size: Math.round(bubbleFont * (small ? 0.8 : 0.95)), font: fonts[0].id, color: "#ffffff", bubble: true, bubbleColor: "rgba(10,14,24,0.72)", bubbleTail: "none", maxWidth: Math.round(W * 0.8), weight: "400" } });
         fx(L, "fadeIn", a, a + 0.3); fx(L, "fadeOut", Math.max(a + 0.3, b - 0.3), b);
+        L.hud = true;   // alt yazı kameradan etkilenmez
         sc.layers.push(L);
       }
       function thought(kn, text, a, b) {
         var c = chars[kn], L = textLayer("Düşünce · " + c.def.name, text, { start: a, end: b, anchor: { x: 0.5, y: 1 },
-          base: { x: curX(kn, a) + (c.facing >= 0 ? 1 : -1) * charH * 0.35, y: groundY - charH - 6, rot: 0, sx: 1, sy: 1, opacity: 1 },
+          base: { x: curX(kn, a) + (c.facing >= 0 ? 1 : -1) * c.charH * 0.35, y: c.ground - c.charH - 6, rot: 0, sx: 1, sy: 1, opacity: 1 },
           text: { size: Math.round(bubbleFont * 1.1), color: "#5b6b7a", bubble: false, weight: "700" } });
         fx(L, "fadeIn", a, a + 0.3); fx(L, "float", a, b, { strength: Math.round(6 * k), speed: 0.7, tilt: 2 }); fx(L, "fadeOut", Math.max(a + 0.3, b - 0.3), b);
         sc.layers.push(L);
@@ -608,6 +680,7 @@
           base: { x: Math.round(W * 0.03), y: Math.round(H * 0.045), rot: 0, sx: 1, sy: 1, opacity: 1 },
           text: { size: Math.round(base * 0.03), font: fonts[0].id, color: "#ffffff", stroke: "rgba(0,0,0,.6)", strokeWidth: Math.round(3 * k), bubble: false, weight: "700", maxWidth: Math.round(W * 0.8) } });
         fx(hd, "fadeIn", 0, 0.35); fx(hd, "fadeOut", 2.3, 2.8);
+        hd.hud = true;
         sc.layers.push(hd);
       }
 
@@ -649,6 +722,12 @@
         var dur = a.seconds || ACTION_DUR[a.act] || 1.2;
         if (a.speed === "fast") dur *= 0.7; else if (a.speed === "slow") dur *= 1.6;
         if (!a.act) { warnings.push("Satır " + it.line + ": “" + it.text + "” anlaşılamadı; " + dur.toFixed(1) + " sn bekleme olarak işlendi."); t = start + dur; return; }
+        if (a.camera) {
+          if (a.target && !chars[norm(a.target)]) warnings.push("Satır " + it.line + ": kamera hedefi “" + a.target + "” bu sahnede yok.");
+          cameraAct(a, start, dur, lastSpeaker);
+          t = start + dur * 0.5;   // kamera hareketi sıradaki replikle örtüşür
+          return;
+        }
         if (!subs.length && a.act !== "wait") {
           var cand = candidateName(it.text);
           warnings.push("Satır " + it.line + ": “" + it.text + "” kimin yaptığı anlaşılamadı." + (cand ? " “" + cand + "” bir karakterse 1. adımda ekle." : ""));
@@ -672,6 +751,7 @@
               c.present = true; L.inPoint = start;
               fx(L, "slideIn", start, start + dur, { dir: dir, easing: a.speed === "fast" ? "easeOutQuad" : "easeOutCubic" });
               walkCycle(kn, start, start + dur, a.speed === "fast" ? 3.2 : 2.2);
+              if (kn === subs[0]) cue("whoosh", start);
               if (dir === "left" || dir === "right") { setFacing(kn, dir === "left" ? 1 : -1, start, !L.tracks.sx.length); setFacing(kn, c.x <= W / 2 ? 1 : -1, start + dur); }
               fx(L, "breathe", start + dur, null, { strength: 2, speed: 0.35 });
               break;
@@ -688,6 +768,7 @@
                   key(L, "x", start + dur, x0 + (group.dir === "left" ? -group.dist : group.dist), "linear");
                 } else fx(L, "slideOut", start, start + dur, { dir: dir2, easing: a.speed === "fast" ? "easeInQuad" : "easeInCubic" });
                 walkCycle(kn, start, start + dur, a.speed === "fast" ? 3.2 : 2.2);
+                if (kn === subs[0]) cue("whoosh", start + dur * 0.3);
                 if (dir2 === "left" || dir2 === "right") setFacing(kn, dir2 === "left" ? -1 : 1, start);
               }
               L.outPoint = start + dur; c.present = false; c.layer = null; c.x = c.slotX;   // yeniden girerse yeni katman
@@ -696,7 +777,7 @@
             case "walk": case "run": {
               ensurePresent(kn, start);
               var step = (a.act === "run" ? 0.34 : 0.24) * W, dx = a.to === "left" ? -step : a.to === "right" ? step : (c.facing >= 0 ? step : -step);
-              if (a.to === "top" || a.to === "bottom") { key(c.layer, "y", start, M.trackValue(c.layer.tracks.y, start, groundY)); key(c.layer, "y", start + dur, groundY + (a.to === "top" ? -H * 0.12 : H * 0.04)); walkCycle(kn, start, start + dur, 2.2); }
+              if (a.to === "top" || a.to === "bottom") { key(c.layer, "y", start, M.trackValue(c.layer.tracks.y, start, c.ground)); key(c.layer, "y", start + dur, c.ground + (a.to === "top" ? -H * 0.12 : H * 0.04)); walkCycle(kn, start, start + dur, 2.2); }
               else moveTo(kn, curX(kn, start) + dx, start, dur, a.act);
               break;
             }
@@ -707,12 +788,13 @@
               else moveTo(kn, curX(kn, start) + (c.facing >= 0 ? 1 : -1) * W * 0.2, start, dur, "walk");
               break;
             }
-            case "jump": ensurePresent(kn, start); fx(c.layer, "bounce", start, start + dur, { strength: Math.round(base * 0.09), speed: 1.25, squash: 35 }); break;
+            case "jump": ensurePresent(kn, start); fx(c.layer, "bounce", start, start + dur, { strength: Math.round(base * 0.09), speed: 1.25, squash: 35 }); if (kn === subs[0]) cue("boing", start + 0.05); break;
             case "spin": ensurePresent(kn, start); fx(c.layer, "spin", start, start + dur, { speed: 1 / dur, dir: "cw" }); break;
             case "turn": ensurePresent(kn, start); setFacing(kn, -c.facing || -1, start + 0.1); break;
             case "fall": {
               L = ensurePresent(kn, start);
               key(L, "rot", start, M.trackValue(L.tracks.rot, start, 0)); key(L, "rot", start + dur, c.facing >= 0 ? 82 : -82, "easeOutBounce");
+              if (kn === subs[0]) cue("thud", start + dur * 0.75);
               c.fallen = true; break;
             }
             case "rise": {
@@ -723,12 +805,12 @@
             }
             case "fly": {
               L = ensurePresent(kn, start);
-              key(L, "y", start, M.trackValue(L.tracks.y, start, groundY)); key(L, "y", start + dur, groundY - H * 0.32, "easeInOutQuad");
+              key(L, "y", start, M.trackValue(L.tracks.y, start, c.ground)); key(L, "y", start + dur, c.ground - H * 0.32, "easeInOutQuad");
               c.fl = fx(L, "float", start + dur, null, { strength: Math.round(10 * k), speed: 0.7, tilt: 3 }); c.flying = true; break;
             }
             case "land": {
               L = ensurePresent(kn, start);
-              key(L, "y", start, M.trackValue(L.tracks.y, start, groundY)); key(L, "y", start + dur, groundY, "easeOutBounce");
+              key(L, "y", start, M.trackValue(L.tracks.y, start, c.ground)); key(L, "y", start + dur, c.ground, "easeOutBounce");
               if (c.fl) { c.fl.end = start; c.fl = null; } c.flying = false; break;
             }
             case "wave": ensurePresent(kn, start); fx(c.layer, "swing", start, start + dur, { strength: 6, speed: 2.5 }); break;
@@ -754,7 +836,9 @@
               break;
             }
             case "back": ensurePresent(kn, start); moveTo(kn, curX(kn, start) - (c.facing >= 0 ? 1 : -1) * W * 0.1, start, dur, "walk"); setFacing(kn, c.facing >= 0 ? 1 : -1, start + dur); break;
-            case "clap": ensurePresent(kn, start); fx(c.layer, "pulse", start, start + dur, { strength: 10, speed: 3 }); break;
+            case "clap": ensurePresent(kn, start); fx(c.layer, "pulse", start, start + dur, { strength: 10, speed: 3 }); if (kn === subs[0]) cue("clap", start + 0.1); break;
+            case "bark": { ensurePresent(kn, start); var nb = norm(it.text), say = /miyav/.test(nb) ? "Miyav!" : /civil|cik cik/.test(nb) ? "Cik cik!" : /kukre|bogur/.test(nb) ? "Grrr!" : "Hav hav!";
+              fx(c.layer, "talk", start, start + dur, { strength: Math.round(5 * k), speed: 5 }); fx(c.layer, "bounce", start, start + Math.min(dur, 0.8), { strength: Math.round(base * 0.015), speed: 2.5, squash: 12 }); thought(kn, say, start, start + dur + 0.4); if (kn === subs[0]) cue("pop", start); break; }
             case "sing": { ensurePresent(kn, start); fx(c.layer, "talk", start, start + dur, { strength: Math.round(5 * k), speed: 3 }); fx(c.layer, "float", start, start + dur, { strength: Math.round(6 * k), speed: 0.8, tilt: 4 }); thought(kn, "♪ ♫", start, start + dur); break; }
             case "slide": { ensurePresent(kn, start); var sdx = (a.to === "left" ? -1 : a.to === "right" ? 1 : (c.facing >= 0 ? 1 : -1)) * W * 0.3; var sfrom = curX(kn, start), sto = Math.max(W * 0.06, Math.min(W * 0.94, sfrom + sdx)); setFacing(kn, sto > sfrom ? 1 : -1, start); key(c.layer, "x", start, sfrom, "easeOutCubic"); key(c.layer, "x", start + dur, sto, "easeOutCubic"); fx(c.layer, "lean", start, start + dur, { angle: sto > sfrom ? -10 : 10, ramp: 0.2 }); c.x = sto; break; }
             case "swim": { ensurePresent(kn, start); fx(c.layer, "float", start, start + dur, { strength: Math.round(8 * k), speed: 1.2, tilt: 6 }); moveTo(kn, curX(kn, start) + (a.to === "left" ? -1 : 1) * W * 0.2, start, dur, "walk"); break; }
@@ -774,6 +858,28 @@
         if (!a.simultaneous) t = start + dur + (a.act === "wait" ? 0 : 0.15);
       });
       sc.duration = Math.round((t + 0.9) * project.fps) / project.fps;
+      /* Göz kırpma: 2,4–4,6 sn aralıklarla 0,13 sn; yürürken kırpılmaz */
+      Object.keys(chars).forEach(function (kn) {
+        var c = chars[kn];
+        if (!c.def.blink.length) return;
+        c.layers.forEach(function (L, li) {
+          var a0 = L.inPoint || 0, a1 = L.outPoint == null ? sc.duration : L.outPoint, seed = hash(kn + ":" + sa.index + ":" + li);
+          var tb = a0 + 1.2 + (seed % 100) / 100 * 1.5, g = 0;
+          var walkSets = L.frameSets.filter(function (fs) { return fs.frames.some(function (f) { return c.def.walk.indexOf(f) >= 0; }); });
+          while (tb + 0.13 < a1 && g < 300) {
+            var walking = walkSets.some(function (fs) { return tb < fs.end && tb + 0.13 > fs.start; });
+            if (!walking) L.frameSets.push({ start: Math.round(tb * 1000) / 1000, end: Math.round((tb + 0.13) * 1000) / 1000, frames: [c.def.blink[0]], fps: 1 });
+            tb += 2.4 + ((hash(kn + ":" + g) % 100) / 100) * 2.2; g++;
+          }
+        });
+      });
+      /* Arka sıradaki karakterler ön sıranın altına çizilir (katman sırası) */
+      if (twoRows) {
+        var idx = [], ls = [];
+        sc.layers.forEach(function (L, i) { if (rowOf.has(L)) { idx.push(i); ls.push(L); } });
+        ls.sort(function (A, B) { return rowOf.get(B) - rowOf.get(A); });
+        idx.forEach(function (i, j) { sc.layers[i] = ls[j]; });
+      }
       M.setKey(bgL.tracks.sx, 0, bgL.base.sx, "linear"); M.setKey(bgL.tracks.sy, 0, bgL.base.sy, "linear");
       M.setKey(bgL.tracks.sx, sc.duration, pushIn ? cover * 1.05 : cover, "linear"); M.setKey(bgL.tracks.sy, sc.duration, pushIn ? cover * 1.05 : cover, "linear");
       fade(sc);
@@ -786,6 +892,7 @@
       var son = textLayer("SON", "SON", { base: { x: W / 2, y: H / 2, rot: 0, sx: 1, sy: 1, opacity: 1 },
         text: { size: Math.round(base * 0.18), font: fonts[2].id, color: "#ffffff", stroke: "#7b2fff", strokeWidth: Math.round(6 * k), bubble: false, maxWidth: W } });
       fx(son, "zoomIn", 0, 0.8);
+      if (settings.sfx !== false) es.sfx.push({ t: 0.1, type: "sparkle" });
       es.layers.push(son);
       scenes.push(es);
     }
@@ -793,7 +900,7 @@
     // Son sahnenin geçişi yok
     scenes[scenes.length - 1].transition = { type: "none", duration: 0.5 };
     // Artık kullanılmayan üretilmiş görselleri temizle
-    Object.keys(project.assets).forEach(function (id) { var a = project.assets[id]; if (a.genKey && !genUsed[id]) delete project.assets[id]; });
+    Object.keys(project.assets).forEach(function (id) { var a = project.assets[id]; if (a.genKey && !genUsed[id] && !castUsed[id]) delete project.assets[id]; });
     var total = scenes.reduce(function (s, x) { return s + x.duration; }, 0);
     return { scenes: scenes, warnings: warnings, stats: { scenes: scenes.length, lines: stats.lines, actions: stats.actions, narrations: stats.narrations, seconds: total, layers: scenes.reduce(function (s, x) { return s + x.layers.length; }, 0) } };
   }
@@ -805,26 +912,29 @@
     "SAHNE 1 - PARK - GÜNDÜZ",
     "Ali soldan girer.",
     "ALİ: Topum nerede? Sabahtan beri arıyorum.",
-    "Ayşe sağdan koşarak girer.",
-    "AYŞE (mutlu): Ali! Bak ne buldum!",
-    "Ali zıplar.",
-    "ALİ (şaşkın): Benim topum! Nerede buldun?",
+    "Karabaş sağdan koşarak gelir.",
+    "Karabaş havlar.",
+    "ALİ (şaşkın): Karabaş! Topumu sen mi aldın?",
+    "Ayşe sağdan girer.",
+    "AYŞE (mutlu): Ali! Bak, Karabaş topunu bulmuş!",
+    "Kamera Ayşe'ye yaklaşır.",
     "AYŞE: Bankın altındaydı. Hadi oynayalım!",
-    "Ali Ayşe'ye doğru yürür.",
-    "Ali ve Ayşe sağa çıkar.",
+    "Kamera uzaklaşır.",
+    "Ali zıplar.",
+    "Herkes sağa çıkar.",
     "",
     "SAHNE 2 - PARK - AKŞAM",
-    "ANLATICI: Akşam olunca iki arkadaş iyice yorulmuştu.",
-    "Ali soldan girer.",
-    "Ayşe sağdan girer.",
-    "ALİ (üzgün): Yarın okul var. Eve dönmeliyiz.",
-    "AYŞE: Üzülme, yarın yine oynarız!",
+    "ANLATICI: Akşam olunca Dede torunlarını almaya geldi.",
+    "Dede soldan yavaşça girer.",
+    "Ali ve Ayşe sağdan girer.",
+    "DEDE: Hava kararıyor çocuklar. Eve dönme vakti.",
+    "ALİ (üzgün): Biraz daha oynayamaz mıyız?",
+    "Kamera Dede'ye yaklaşır.",
+    "DEDE (mutlu): Yarın yine geliriz. Söz!",
+    "Kamera uzaklaşır.",
     "Ayşe el sallar.",
     "Ali gülümser.",
-    "Ayşe sağa çıkar.",
-    "Ali düşünür.",
-    "ALİ: İyi ki Ayşe var.",
-    "Ali sola çıkar."
+    "Herkes sola çıkar."
   ].join("\n");
 
   var HELP = [
@@ -836,7 +946,9 @@
     "                                 el sallar, güler, ağlar, kızar, şaşırır, korkar, dans eder, oturur, uyur, düşünür,",
     "                                 bakar, büyür, küçülür, saklanır, bekler. Yön: sağdan/soldan, sağa/sola.",
     "Ali Ayşe'ye doğru yürür.       → hedefe yürür.   Ali ve Ayşe sola çıkar. → birlikte.   Herkes zıplar.",
-    "2 saniye bekler.               → süre.   BAŞLIK: Film adı   YAZAN: Adınız   → açılış kartı"
+    "2 saniye bekler.               → süre.   BAŞLIK: Film adı   YAZAN: Adınız   → açılış kartı",
+    "Kamera Ayşe'ye yaklaşır.       → yakın çekim.   Kamera uzaklaşır. → genel plan.   Kamera sağa kayar. → kaydırma",
+    "Karabaş havlar.                → hayvan sesi balonu (havlar, miyavlar, cıvıldar). Herkes ... → sahnedeki tüm karakterler"
   ].join("\n");
 
   return { parse: parse, analyze: analyze, analyzeAction: analyzeAction, splitLine: splitLine, lineDuration: lineDuration, emotionOf: emotionOf,

@@ -31,7 +31,7 @@
   var Easy = { step: 1, open: false, built: false, warnings: [], stats: null };
   root.Easy = Easy;
   var preview = { playing: false, T: 0, wall: 0, T0: 0, raf: 0, canvas: null, ctx: null };
-  var ROLE_LABELS = [["pose", "Duruş"], ["talk", "Ağzı açık (konuşma)"], ["walk", "Adım (yürüme)"], ["mutlu", "Mutlu"], ["uzgun", "Üzgün"], ["kizgin", "Kızgın"], ["saskin", "Şaşkın"], ["korkmus", "Korkmuş"]];
+  var ROLE_LABELS = [["pose", "Duruş"], ["talk", "Ağzı açık (konuşma)"], ["walk", "Adım (yürüme)"], ["blink", "Göz kırpma"], ["mutlu", "Mutlu"], ["uzgun", "Üzgün"], ["kizgin", "Kızgın"], ["saskin", "Şaşkın"], ["korkmus", "Korkmuş"]];
 
   function App() { return root.App; }
   function project() { return root.App.S.project; }
@@ -93,7 +93,7 @@
       var name = h("input", { type: "text", class: "wz-name", value: c.name, maxlength: "40", placeholder: "Karakterin adı", "aria-label": "Karakter adı",
         onchange: function () { App().renameCast(c.id, name.value); renderCast(); renderSummary(); } });
       var facing = h("select", { class: "wz-facing", title: "Resimde yüzü hangi yöne bakıyor?", onchange: function () { c.facing = facing.value; App().commit(); } },
-        h("option", { value: "right", text: "Yüz: sağa bakıyor" }), h("option", { value: "left", text: "Yüz: sola bakıyor" }));
+        h("option", { value: "right", text: "Sağa bakıyor" }), h("option", { value: "left", text: "Sola bakıyor" }));
       facing.value = c.facing || "right";
       var extra = c.images.filter(function (im) { return !pose || im.assetId !== pose.assetId; });
       var extraList = h("div", { class: "sc-imgs" });
@@ -108,7 +108,7 @@
       extraList.appendChild(h("button", { type: "button", class: "small", onclick: function () { App().pickCastImages(c.id); } }, "+ Resim"));
       var details = h("details", { class: "wz-more" }, h("summary", null, "Ek resimler" + (extra.length ? " (" + extra.length + ")" : "") + " · ağız, adım, duygu"),
         h("p", { class: "hint" }, "İsteğe bağlı: ağzı açık bir kare eklersen konuşurken ağzı oynar; adım kareleri eklersen yürürken bacakları hareket eder; mutlu/üzgün/kızgın resimleri o duygudaki repliklerde kullanılır."), extraList);
-      box.appendChild(h("div", { class: "wz-card" }, drop, name, h("div", { class: "wz-card-foot" }, facing,
+      box.appendChild(h("div", { class: "wz-card" }, drop, name, h("div", { class: "wz-card-foot" }, facing, root.UI.sizeSelect(c, function () { App().commit(); }, "wz-facing"),
         h("button", { type: "button", class: "small danger", title: "Karakteri sil", onclick: function () { if (c.images.length && !confirm("“" + c.name + "” silinsin mi?")) return; App().removeCastMember(c.id); renderCast(); renderSummary(); } }, "Sil")), details));
     });
     box.appendChild(h("button", { type: "button", class: "wz-card add", onclick: function () {
@@ -194,7 +194,7 @@
     var st = r.stats;
     box.appendChild(h("div", { class: "wz-sumline" }, h("b", null, st.scenes + " sahne · " + st.lines + " replik · " + st.actions + " eylem"), " · film yaklaşık " + fmtSec(st.seconds + 5)));
     var chips = h("div", { class: "sc-chips" }), withImg = sc.cast.filter(function (c) { return c.images.length; }).map(function (c) { return D.norm(c.name); });
-    r.names.forEach(function (nm) { var ok = withImg.indexOf(D.norm(nm)) >= 0; chips.appendChild(h("span", { class: "chip " + (ok ? "ok" : "ph") }, (ok ? "✓ " : "◌ ") + nm + (ok ? "" : " (resimsiz: yer tutucu)"))); });
+    r.names.forEach(function (nm) { var ok = withImg.indexOf(D.norm(nm)) >= 0; chips.appendChild(h("span", { class: "chip " + (ok ? "ok" : "ph") }, (ok ? "✓ " : "◌ ") + nm + (ok ? "" : " (resimsiz: otomatik çizilir)"))); });
     if (r.names.length) box.appendChild(chips);
     if (st.candidates.length) {
       var cand = h("div", { class: "sc-chips" }, h("span", { class: "muted" }, "Karakter mi? "));
@@ -216,7 +216,7 @@
     var st = script().settings;
     $("wzCharHeight").value = Math.round(st.charHeight * 100); $("wzCharHeightLabel").textContent = "%" + Math.round(st.charHeight * 100);
     $("wzSpeed").value = st.speed; $("wzBubble").value = st.bubbleStyle;
-    $("wzTitle").checked = st.titleCard; $("wzEnd").checked = st.endCard; $("wzHeadings").checked = st.headings;
+    $("wzTitle").checked = st.titleCard; $("wzEnd").checked = st.endCard; $("wzHeadings").checked = st.headings; $("wzSfx").checked = st.sfx !== false;
   }
   function renderMusic() {
     var p = project(), box = $("wzMusic");
@@ -259,7 +259,9 @@
   function tick(now) {
     if (!preview.playing) return;
     var total = root.Exporter.totalDuration(project());
-    preview.T = (preview.T0 + (now - preview.wall) / 1000) % total;
+    var rawT = preview.T0 + (now - preview.wall) / 1000;
+    preview.T = rawT % total;
+    if (rawT >= total) { preview.T0 = preview.T; preview.wall = now; if (root.Sfx) root.Sfx.live.play(project(), preview.T); if (project().audio) { try { $("audioEl").currentTime = preview.T; } catch (e) { /* yoksay */ } } }
     drawPreview();
     preview.raf = requestAnimationFrame(tick);
   }
@@ -272,14 +274,24 @@
     preview.playing = true; preview.wall = performance.now(); preview.T0 = preview.T;
     $("wzPlay").textContent = "❚❚ Durdur";
     var au = $("audioEl"); if (project().audio) { try { au.currentTime = preview.T; au.play().catch(function () { /* yoksay */ }); } catch (e) { /* yoksay */ } }
+    if (root.Sfx) root.Sfx.live.play(project(), preview.T);
     preview.raf = requestAnimationFrame(tick);
   }
   function pausePreview() {
     preview.playing = false; cancelAnimationFrame(preview.raf);
     $("wzPlay").textContent = "▶ Oynat";
     $("audioEl").pause();
+    if (root.Sfx) root.Sfx.live.stop();
   }
   function stopPreview() { pausePreview(); }
+
+  /* Örnek senaryonun karakterleri (resmi olmayanlar) kütüphaneden eklenir */
+  Easy.addSampleCast = function () {
+    var D = root.Director, have = script().cast.filter(function (c) { return c.images.length; }).map(function (c) { return D.norm(c.name); });
+    var want = [{ id: "ali", name: "Ali" }, { id: "ayse", name: "Ayşe" }, { id: "kopek", name: "Karabaş" }, { id: "dede", name: "Dede" }].filter(function (w) { return have.indexOf(D.norm(w.name)) < 0; });
+    if (!want.length || !root.Characters) return Promise.resolve([]);
+    return App().addLibraryCast(want).then(function (added) { renderCast(); renderSummary(); return added; });
+  };
 
   /* Üretim */
   Easy.build = function () {
@@ -333,11 +345,13 @@
     $("wzOpenStudio").addEventListener("click", Easy.closeWizard);
     $("btnEasy").addEventListener("click", function () { Easy.openWizard(); });
     $("wzAddBg").addEventListener("click", function () { App().pickBackgrounds(); });
+    $("wzGallery").addEventListener("click", function () { root.UI.openGallery(function () { renderCast(); renderSummary(); }); });
     $("wzText").addEventListener("input", function () { script().text = $("wzText").value; clearTimeout(Easy._t); Easy._t = setTimeout(renderSummary, 250); });
     $("wzText").addEventListener("change", function () { App().commit(); });
     $("wzSample").addEventListener("click", function () {
       if ($("wzText").value.trim() && !confirm("Mevcut senaryo örnekle değiştirilsin mi?")) return;
       $("wzText").value = root.Director.SAMPLE; script().text = root.Director.SAMPLE; App().commit(); renderSummary();
+      Easy.addSampleCast();
     });
     document.querySelectorAll("#wizard [data-ins]").forEach(function (b) {
       b.addEventListener("click", function () {
@@ -351,7 +365,7 @@
     document.addEventListener("click", function (ev) { if (!ev.target.closest(".wz-dd")) closeMenus(); });
     $("wzBuild").addEventListener("click", Easy.build);
     $("wzPlay").addEventListener("click", function () { if (preview.playing) pausePreview(); else playPreview(); });
-    $("wzSeek").addEventListener("input", function () { var total = root.Exporter.totalDuration(project()); preview.T = +$("wzSeek").value / 1000 * total; preview.T0 = preview.T; preview.wall = performance.now(); if (project().audio) { try { $("audioEl").currentTime = preview.T; } catch (e) { /* yoksay */ } } drawPreview(); });
+    $("wzSeek").addEventListener("input", function () { var total = root.Exporter.totalDuration(project()); preview.T = +$("wzSeek").value / 1000 * total; preview.T0 = preview.T; preview.wall = performance.now(); if (project().audio) { try { $("audioEl").currentTime = preview.T; } catch (e) { /* yoksay */ } } if (preview.playing && root.Sfx) root.Sfx.live.play(project(), preview.T); drawPreview(); });
     document.querySelectorAll("#wizard [data-fmt]").forEach(function (b) { b.addEventListener("click", function () { download(b.getAttribute("data-fmt")); }); });
     $("wzSaveProj").addEventListener("click", function () { App().saveProjectFile(); });
     $("wzCancel").addEventListener("click", function () { if (exportCtl) exportCtl.cancelled = true; });
@@ -368,7 +382,7 @@
     $("wzCharHeight").addEventListener("change", function () { App().commit(); });
     $("wzSpeed").addEventListener("change", function () { script().settings.speed = $("wzSpeed").value; App().commit(); renderSummary(); });
     $("wzBubble").addEventListener("change", function () { script().settings.bubbleStyle = $("wzBubble").value; App().commit(); });
-    [["wzTitle", "titleCard"], ["wzEnd", "endCard"], ["wzHeadings", "headings"]].forEach(function (pair) { $(pair[0]).addEventListener("change", function () { script().settings[pair[1]] = $(pair[0]).checked; App().commit(); }); });
+    [["wzTitle", "titleCard"], ["wzEnd", "endCard"], ["wzHeadings", "headings"], ["wzSfx", "sfx"]].forEach(function (pair) { $(pair[0]).addEventListener("change", function () { script().settings[pair[1]] = $(pair[0]).checked; App().commit(); }); });
     window.addEventListener("resize", function () { if (Easy.open && Easy.step === 3) { fitCanvas(); drawPreview(); } });
     $("wzCanvas").addEventListener("click", function () { if (preview.playing) pausePreview(); else playPreview(); });
   };
