@@ -264,6 +264,24 @@
       desc: "Ezil-uza: lastik gibi esner.",
       params: [P("strength", "Güç", "range", 10, { min: 0, max: 60, step: 0.5, unit: "%" }), pSpeed(1.5)],
       apply: function (acc, tr, u, p, pr) { var s = (pr.strength / 100) * Math.sin(TAU * pr.speed * u); acc.msx *= 1 + s; acc.msy *= 1 - s; } },
+    { type: "talk", kind: "loop", group: "Sürekli", label: "Konuş", icon: "🗣️",
+      desc: "Konuşma ritmi: küçük baş hareketi ve hafif esneme. Senaryo üretimi replik sırasında kullanır.",
+      params: [pStrengthPx(4, 40), pSpeed(5, 12)],
+      apply: function (acc, tr, u, p, pr) {
+        var w = Math.abs(Math.sin(TAU * pr.speed * u)), w2 = Math.sin(TAU * pr.speed * 0.37 * u);
+        acc.dy -= pr.strength * w * 0.6;
+        acc.drot += 1.2 * w2;
+        acc.msy *= 1 + 0.015 * w;
+      } },
+    { type: "lean", kind: "loop", group: "Sürekli", label: "Eğil", icon: "🙇",
+      desc: "Belirtilen açıya yumuşakça eğilir, pencere bitiminde geri döner (üzgün, düşünceli, uykulu duruş).",
+      params: [P("angle", "Açı", "range", -8, { min: -60, max: 60, step: 1, unit: "°" }), P("ramp", "Geçiş", "range", 0.4, { min: 0.05, max: 3, step: 0.05, unit: "sn" })],
+      apply: function (acc, tr, u, p, pr, ctx, eff, w) {
+        var span = w ? Math.max(1e-6, w.end - w.start) : 1e9;
+        var inK = Math.min(1, u / pr.ramp), outK = w && w.end < 1e8 ? Math.min(1, (span - u) / pr.ramp) : 1;
+        var sm = function (x) { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+        acc.drot += pr.angle * sm(inK) * sm(outK);
+      } },
     { type: "orbit", kind: "loop", group: "Sürekli", label: "Daire Çiz", icon: "🌊",
       desc: "Dairesel yolda dolanır.",
       params: [P("strength", "Yarıçap", "range", 40, { min: 1, max: 800, step: 1, unit: "px" }), pSpeed(0.5),
@@ -347,6 +365,21 @@
     return t >= (layer.inPoint || 0) - EPS && t < layerEnd(layer, sceneDuration) - EPS;
   }
 
+  /* t anında çizilecek görsel: önce zaman pencereli kare setleri (senaryo üretimi: konuşma/yürüme/duygu), sonra ana dizi */
+  function frameAt(layer, t) {
+    var sets = layer.frameSets;
+    if (sets && sets.length) {
+      for (var i = sets.length - 1; i >= 0; i--) {
+        var fs = sets[i];
+        if (fs.frames && fs.frames.length && t >= fs.start - EPS && t < fs.end - EPS) {
+          var idx = Math.floor(Math.max(0, t - fs.start) * (fs.fps || 8) + 1e-6) % fs.frames.length;
+          return fs.frames[idx];
+        }
+      }
+    }
+    return layer.frames[frameIndex(layer, t)];
+  }
+
   /* Kare dizisinde t anında gösterilecek kare */
   function frameIndex(layer, t) {
     var n = layer.frames ? layer.frames.length : 0;
@@ -391,7 +424,7 @@
         var v = eff.params ? eff.params[pd.key] : undefined;
         pr[pd.key] = (v == null || v === "") ? pd.def : (pd.type === "range" ? +v : v);
       }
-      def.apply(acc, tr, u, p, pr, ctx, eff);
+      def.apply(acc, tr, u, p, pr, ctx, eff, w);
     }
     return {
       x: tr.x + acc.dx, y: tr.y + acc.dy, rot: tr.rot + acc.drot,
@@ -407,7 +440,7 @@
     trackValue: trackValue, setKey: setKey, removeKey: removeKey, hasKey: hasKey, findKey: findKey,
     keyTimes: keyTimes, hasAnyKey: hasAnyKey, moveKeys: moveKeys,
     EFFECTS: EFFECTS, EFFECT_LIST: EFFECT_LIST, createEffect: createEffect, effectWindow: effectWindow,
-    evalLayer: evalLayer, frameIndex: frameIndex, layerVisibleAt: layerVisibleAt, layerEnd: layerEnd,
+    evalLayer: evalLayer, frameIndex: frameIndex, frameAt: frameAt, layerVisibleAt: layerVisibleAt, layerEnd: layerEnd,
     quantizeTime: quantizeTime, uid: uid, clamp: clamp
   };
 });

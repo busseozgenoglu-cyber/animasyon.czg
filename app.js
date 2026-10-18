@@ -82,7 +82,7 @@
     clearTimeout(S.autosaveTimer);
     S.autosaveTimer = setTimeout(function () {
       var p = S.project;
-      var plain = { version: p.version, name: p.name, width: p.width, height: p.height, fps: p.fps, audio: p.audio, assets: p.assets, scenes: p.scenes, savedAt: Date.now() };
+      var plain = { version: p.version, name: p.name, width: p.width, height: p.height, fps: p.fps, audio: p.audio, assets: p.assets, scenes: p.scenes, script: p.script, savedAt: Date.now() };
       idbSet("autosave", plain).catch(function () {
         if (!autosaveWarned) { autosaveWarned = true; App.toast("Otomatik kayıt yapılamadı (depolama dolu olabilir). Çalışmanızı “Kaydet” ile indirin.", "error"); }
       });
@@ -93,7 +93,7 @@
   /* ── Geçmiş ──────────────────────────────────────────────── */
   function snapshot() {
     var p = S.project;
-    return JSON.stringify({ name: p.name, width: p.width, height: p.height, fps: p.fps, scenes: p.scenes, sceneIndex: S.sceneIndex, sel: S.sel.layerId });
+    return JSON.stringify({ name: p.name, width: p.width, height: p.height, fps: p.fps, scenes: p.scenes, script: p.script, sceneIndex: S.sceneIndex, sel: S.sel.layerId });
   }
   App.commit = function () {
     var s = snapshot();
@@ -108,6 +108,7 @@
   function restore(s) {
     var o = JSON.parse(s), p = S.project;
     p.name = o.name; p.width = o.width; p.height = o.height; p.fps = o.fps; p.scenes = o.scenes;
+    if (o.script) p.script = o.script;
     S.sceneIndex = Math.min(o.sceneIndex || 0, p.scenes.length - 1);
     S.sel = { layerId: App.layerById(o.sel) ? o.sel : null, keyTime: null };
     S.time = Math.min(S.time, Math.max(0, App.scene().duration - App.frameDur()));
@@ -476,6 +477,110 @@
     App.commit(); UI.syncProps(); UI.renderTimeline(); S.dirty = true;
   };
 
+  /* ── Senaryodan üretim ───────────────────────────────────── */
+  App.ensureScript = function () { if (!S.project.script) S.project.script = Model.newScript(); return S.project.script; };
+  App.addCastMember = function (name) {
+    var sc = App.ensureScript(), m = { id: M.uid("ch"), name: String(name || "Karakter").trim().slice(0, 40), facing: "right", images: [] };
+    sc.cast.push(m); App.commit(); return m;
+  };
+  App.renameCast = function (id, name) {
+    var c = App.ensureScript().cast.find(function (x) { return x.id === id; });
+    if (!c) return;
+    name = String(name || "").trim().slice(0, 40);
+    if (name) c.name = name;
+    App.commit(); UI.renderScriptDialog();
+  };
+  App.removeCastMember = function (id) {
+    var sc = App.ensureScript();
+    sc.cast = sc.cast.filter(function (x) { return x.id !== id; });
+    App.commit(); UI.renderScriptDialog();
+  };
+  App.removeCastImage = function (castId, assetId) {
+    var c = App.ensureScript().cast.find(function (x) { return x.id === castId; });
+    if (!c) return;
+    c.images = c.images.filter(function (im) { return im.assetId !== assetId; });
+    App.commit(); UI.renderScriptDialog();
+  };
+  App.pickCastImages = function (castId) { S.pendingCast = castId; $("fileCast").value = ""; $("fileCast").click(); };
+  App.pickBackgrounds = function () { $("fileBgs").value = ""; $("fileBgs").click(); };
+  function readMany(files) {
+    var list = Array.prototype.slice.call(files || []).filter(function (f) { return (f.type || "").indexOf("image/") === 0 || /\.(png|jpe?g|webp|gif|svg)$/i.test(f.name); });
+    list.sort(naturalCompare);
+    var assets = [], chain = Promise.resolve();
+    list.forEach(function (f) { chain = chain.then(function () { return readImageAsset(f).then(function (a) { assets.push(a); }).catch(function () { /* atla */ }); }); });
+    return chain.then(function () { assets.forEach(function (a) { S.project.assets[a.id] = a; }); return R.ensureAssets(S.project).then(function () { return assets; }); });
+  }
+  function addCastImages(files) {
+    var castId = S.pendingCast; S.pendingCast = null;
+    var c = App.ensureScript().cast.find(function (x) { return x.id === castId; });
+    if (!c) return;
+    readMany(files).then(function (assets) {
+      if (!assets.length) { App.toast("Görsel okunamadı", "error"); return; }
+      assets.forEach(function (a) {
+        var role = c.images.some(function (im) { return im.role === "pose"; }) ? guessRole(a.name) : "pose";
+        c.images.push({ assetId: a.id, role: role });
+      });
+      App.commit(); UI.renderScriptDialog();
+      App.toast(assets.length + " görsel “" + c.name + "” karakterine eklendi", "ok");
+    });
+  }
+  /* Dosya adından rol tahmini: ali-konusma.png, ayse_yuru2.png, mutlu.png … */
+  function guessRole(name) {
+    var n = root.Director.norm(name);
+    if (/konus|agiz|talk|mouth/.test(n)) return "talk";
+    if (/yuru|adim|walk|step|kos/.test(n)) return "walk";
+    if (/mutlu|happy|gul/.test(n)) return "mutlu";
+    if (/uzgun|sad|agla/.test(n)) return "uzgun";
+    if (/kizgin|angry|sinir/.test(n)) return "kizgin";
+    if (/saskin|surpris/.test(n)) return "saskin";
+    if (/kork|fear|scared/.test(n)) return "korkmus";
+    return "talk";
+  }
+  function addBackgrounds(files) {
+    readMany(files).then(function (assets) {
+      if (!assets.length) { App.toast("Görsel okunamadı", "error"); return; }
+      var sc = App.ensureScript();
+      assets.forEach(function (a) { sc.backgrounds.push({ id: M.uid("bg"), assetId: a.id, name: baseName(a.name).replace(/[-_]+/g, " ") }); });
+      App.commit(); UI.renderScriptDialog();
+      App.toast(assets.length + " arka plan eklendi", "ok");
+    });
+  }
+  App.removeBackground = function (id) {
+    var sc = App.ensureScript();
+    sc.backgrounds = sc.backgrounds.filter(function (b) { return b.id !== id; });
+    App.commit(); UI.renderScriptDialog();
+  };
+  App.autoCastFromScript = function () {
+    var sc = App.ensureScript(), D = root.Director, ast = D.parse(sc.text), added = 0;
+    var have = sc.cast.map(function (c) { return D.norm(c.name); });
+    ast.speakers.forEach(function (nm) { if (have.indexOf(D.norm(nm)) < 0) { sc.cast.push({ id: M.uid("ch"), name: nm, facing: "right", images: [] }); have.push(D.norm(nm)); added++; } });
+    if (added) App.commit();
+    return added;
+  };
+  App.buildFromScript = function () {
+    var sc = App.ensureScript();
+    if (!sc.text.trim()) return Promise.reject(new Error("Önce senaryoyu yaz (ya da “Örnek senaryo”yu aç)."));
+    if (S.playing) App.pause();
+    return R.ensureAssets(S.project).then(function () {
+      var res = root.Director.build(S.project);
+      S.project.scenes = res.scenes;
+      // Kullanıcı özel bir ad vermediyse film adı senaryodaki BAŞLIK olur
+      var curName = (S.project.name || "").trim(), prevTitle = (S.lastScriptTitle || "").trim();
+      var title = root.Director.parse(sc.text).title;
+      if (title && (!curName || curName === "Adsız Film" || curName === "Örnek Film" || curName === prevTitle)) S.project.name = title.slice(0, 80);
+      S.lastScriptTitle = title || "";
+      S.sceneIndex = 0; S.time = 0; S.sel = { layerId: null, keyTime: null };
+      R.invalidateThumbs();
+      return R.ensureAssets(S.project).then(function () {
+        App.commit(); layoutStage(); UI.renderAll(); S.dirty = true;
+        UI.showBuildWarnings(res.warnings);
+        S.playAll = true; S.loop = false; UI.updateToggles();
+        setTimeout(function () { App.play(); }, 150);
+        return res;
+      });
+    });
+  };
+
   /* ── Sahneler ────────────────────────────────────────────── */
   App.switchScene = function (i, keepTime) {
     if (i < 0 || i >= S.project.scenes.length) return;
@@ -789,6 +894,7 @@
       if (ctrl && (ev.key === "s" || ev.key === "S")) { ev.preventDefault(); App.saveProjectFile(); return; }
       if (ctrl && (ev.key === "o" || ev.key === "O")) { ev.preventDefault(); $("fileProject").click(); return; }
       if (ctrl && (ev.key === "e" || ev.key === "E")) { ev.preventDefault(); UI.openExport(); return; }
+      if (ctrl && (ev.key === "g" || ev.key === "G")) { ev.preventDefault(); UI.openScript(); return; }
       if (ctrl && (ev.key === "d" || ev.key === "D")) { ev.preventDefault(); if (L) App.duplicateLayer(L.id); return; }
       if (ctrl) return;
       switch (ev.key) {
@@ -832,6 +938,8 @@
     $("fileFrames").addEventListener("change", function (ev) { applyFrames(ev.target.files); });
     $("fileProject").addEventListener("change", function (ev) { if (ev.target.files[0]) App.openProjectFile(ev.target.files[0]); });
     $("fileAudio").addEventListener("change", function (ev) { if (ev.target.files[0]) App.setAudioFile(ev.target.files[0]); });
+    $("fileCast").addEventListener("change", function (ev) { addCastImages(ev.target.files); });
+    $("fileBgs").addEventListener("change", function (ev) { addBackgrounds(ev.target.files); });
     $("fileBgImage").addEventListener("change", function (ev) {
       var f = ev.target.files[0]; if (!f) return;
       readImageAsset(f).then(function (a) {

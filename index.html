@@ -23,6 +23,8 @@
       <button id="btnOpen" class="tb" type="button" title="Proje dosyası aç (Ctrl+O)">Aç</button>
       <button id="btnSave" class="tb" type="button" title="Projeyi dosya olarak kaydet (Ctrl+S)">Kaydet</button>
       <span class="sep" aria-hidden="true"></span>
+      <button id="btnScript" class="tb script" type="button" title="Senaryo yaz, karakter görsellerini yükle; filmi program kursun">🎬 Senaryo</button>
+      <span class="sep" aria-hidden="true"></span>
       <button id="btnUndo" class="tb icon" type="button" title="Geri al (Ctrl+Z)" aria-label="Geri al">↶</button>
       <button id="btnRedo" class="tb icon" type="button" title="İleri al (Ctrl+Y)" aria-label="İleri al">↷</button>
       <span class="sep" aria-hidden="true"></span>
@@ -102,10 +104,11 @@
           <h1>Görsellerini hareketlendir.</h1>
           <p>Bir çizim, fotoğraf ya da çıkartma yükle; tek tıkla zıplasın, yürüsün, uçsun. Sonra GIF ya da video olarak indir.</p>
           <div class="empty-actions">
-            <button id="emptyAdd" class="primary big" type="button">Görsel yükle</button>
+            <button id="emptyScript" class="primary big" type="button">🎬 Senaryodan film üret</button>
+            <button id="emptyAdd" class="big ghost" type="button">Görsel yükle</button>
             <button id="emptyDemo" class="big ghost" type="button">Örnek filmi aç</button>
           </div>
-          <ol class="steps"><li>Görsel ekle</li><li>Hareket seç</li><li>Dışa aktar</li></ol>
+          <ol class="steps"><li>Senaryoyu yaz</li><li>Karakter görsellerini yükle</li><li>Üret ve indir</li></ol>
         </div>
       </div>
       <div class="drop-hint" id="dropHint" hidden>Bırakın: görseller sahneye eklenecek</div>
@@ -173,6 +176,52 @@
   </form>
 </dialog>
 
+<dialog id="scriptDialog" class="dlg">
+  <form method="dialog" class="dlg-card xwide" id="scriptForm">
+    <header>
+      <div><h2>Senaryodan film üret</h2><p class="muted" style="margin:2px 0 0;font-size:12px">Senaryoyu yaz, karakterlerin görsellerini yükle; sahneleri, girişleri, balonları ve hareketleri program kursun. Sonra stüdyoda elle düzeltebilirsin.</p></div>
+      <div class="row"><button type="button" id="scSample" class="small">Örnek senaryo</button><button value="cancel" class="x" type="submit" aria-label="Kapat">×</button></div>
+    </header>
+    <div class="sc-grid">
+      <section class="sc-col">
+        <h3>1 · Karakterler</h3>
+        <div id="scCast" class="sc-cast"></div>
+        <div class="pill-row">
+          <button type="button" id="scAddChar">+ Karakter</button>
+          <button type="button" id="scAutoCast" title="Senaryoda konuşan herkesi listeye ekler">Senaryodan al</button>
+        </div>
+        <p class="hint">Her karaktere en az bir görsel yükle (duruş). İstersen ağzı açık kare (konuşma), adım kareleri (yürüme) ve duygu görselleri de ekle; program yerinde kullanır. Görsel yüklenmeyen karakterler için renkli yer tutucu çizilir.</p>
+        <h3>Arka planlar <span class="unit">(isteğe bağlı)</span></h3>
+        <div id="scBgs" class="sc-bgs"></div>
+        <button type="button" id="scAddBg" class="small">+ Arka plan görseli</button>
+        <p class="hint">Adı sahne başlığıyla eşleşir (ör. “park.png” → SAHNE 1 - PARK). Eşleşmezse mekâna ve zamana göre çizilmiş bir arka plan kullanılır.</p>
+      </section>
+      <section class="sc-col sc-main">
+        <h3>2 · Senaryo</h3>
+        <textarea id="scText" spellcheck="false" placeholder="BAŞLIK: Filmin adı&#10;&#10;SAHNE 1 - PARK - GÜNDÜZ&#10;Ali soldan girer.&#10;ALİ: Merhaba!&#10;AYŞE (mutlu): Hoş geldin Ali!&#10;Ali zıplar."></textarea>
+        <details class="sc-help"><summary>Nasıl yazılır? (format rehberi)</summary><pre id="scHelp"></pre></details>
+        <div id="scPreview" class="sc-preview"></div>
+      </section>
+      <section class="sc-col">
+        <h3>3 · Ayarlar</h3>
+        <label class="field">Karakter boyu <span class="unit" id="scCharHeightLabel"></span><input id="scCharHeight" type="range" min="25" max="65" step="1"></label>
+        <label class="field">Konuşma hızı <select id="scSpeed"><option value="slow">Yavaş (çocuklar için)</option><option value="normal">Normal</option><option value="fast">Hızlı</option></select></label>
+        <label class="field">Balon rengi <select id="scBubble"><option value="white">Beyaz</option><option value="color">Karaktere göre renkli</option></select></label>
+        <label class="check"><input type="checkbox" id="scTitle"> Açılışta başlık kartı</label>
+        <label class="check"><input type="checkbox" id="scEnd"> Sonda “SON” kartı</label>
+        <label class="check"><input type="checkbox" id="scHeadings"> Sahne başlıklarını köşede göster</label>
+        <label class="check"><input type="checkbox" id="scFade"> Sahneler arası siyaha geçiş</label>
+        <p class="hint" id="scSizeNote"></p>
+        <p class="hint">Üretim mevcut sahneleri yeniler. Elle yaptığın değişiklikler kaybolur; üretimden sonra düzenlemek daha iyidir.</p>
+      </section>
+    </div>
+    <footer>
+      <button value="cancel" class="ghost" type="submit">Kapat</button>
+      <button id="scBuild" class="primary" type="button">🎬 Filmi üret</button>
+    </footer>
+  </form>
+</dialog>
+
 <dialog id="helpDialog" class="dlg">
   <form method="dialog" class="dlg-card wide">
     <header><h2>Nasıl kullanılır?</h2><button value="cancel" class="x" type="submit" aria-label="Kapat">×</button></header>
@@ -184,6 +233,8 @@
           <li><b>Hareket seç.</b> Katmanı tıkla, sağdaki <i>Hareket efektleri</i> bölümünden Zıpla, Yürü, Süzül, Kayarak Gir gibi efektleri ekle; gücünü ve hızını kaydırıcılarla ayarla.</li>
           <li><b>Dışa aktar.</b> GIF, MP4 ya da WebM olarak indir. Her şey tarayıcında olur, dosyaların hiçbir sunucuya gitmez.</li>
         </ol>
+        <h3>Senaryodan otomatik film</h3>
+        <p>Üstteki <b>🎬 Senaryo</b> düğmesine bas. Karakterleri ve görsellerini ekle, senaryoyu yaz (SAHNE başlıkları, <i>ALİ: replik</i>, <i>Ali soldan girer.</i> gibi eylemler), <b>Filmi üret</b> de. Program sahneleri, girişleri, konuşma balonlarını ve hareketleri kurar; sonra burada istediğin gibi düzeltirsin.</p>
         <h3>Anahtar kareler (ileri düzey)</h3>
         <p>Bir katmanı farklı zamanlarda farklı yerlere koymak için zaman çizelgesinde kareyi seç, katmanı taşı ve <b>K</b> tuşuna bas (ya da ◆ düğmesi). Aradaki hareket kendiliğinden oluşur; geçiş eğrisini seçebilirsin. <i>Ani geçiş</i> eğrisi poz-poz çizgi film hissi verir.</p>
         <h3>Sahneler</h3>
@@ -224,6 +275,8 @@
 <input type="file" id="fileProject" accept=".json,application/json" hidden>
 <input type="file" id="fileAudio" accept="audio/*" hidden>
 <input type="file" id="fileBgImage" accept="image/*" hidden>
+<input type="file" id="fileCast" accept="image/*,.svg" multiple hidden>
+<input type="file" id="fileBgs" accept="image/*,.svg" multiple hidden>
 
 <script src="lib/zip.js?v=1"></script>
 <script src="lib/gif-encoder.js?v=1"></script>
@@ -234,6 +287,7 @@
 <script src="render.js?v=1"></script>
 <script src="demo.js?v=1"></script>
 <script src="exporter.js?v=1"></script>
+<script src="director.js?v=1"></script>
 <script src="ui.js?v=1"></script>
 <script src="app.js?v=1"></script>
 </body>

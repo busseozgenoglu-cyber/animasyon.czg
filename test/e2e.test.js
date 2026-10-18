@@ -193,7 +193,39 @@ async function png(page, name, w, h, drawSrc) {
     await page.waitForTimeout(400);
     check(sig === (await page.evaluate(() => JSON.stringify([App.S.project.name, App.S.project.scenes.map((s) => s.layers.length)]))), "yenilemeden sonra proje aynı");
 
-    console.log("18) Dar ekran düzeni");
+    console.log("18) Senaryodan film üretme");
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.click("#btnScript");
+    await page.waitForSelector("#scriptDialog[open]");
+    await page.click("#scSample");
+    await page.waitForTimeout(400);
+    check(/2 sahne · 7 replik · 12 eylem/.test(await page.textContent("#scPreview")), "önizleme: sahne/replik/eylem sayıları");
+    await page.click("#scAutoCast");
+    await page.waitForTimeout(150);
+    check((await page.evaluate(() => App.S.project.script.cast.map((c) => c.name).join())) === "Ali,Ayşe", "senaryodan karakterler alındı");
+    // İlk karaktere görsel yükle (tarayıcıda çizilen PNG) → yer tutucu yerine kullanılır
+    const ali = await png(page, "ali-durus.png", 200, 300, "x.fillStyle='#e76f51';x.fillRect(60,120,80,150);x.fillStyle='#ffd6a5';x.beginPath();x.arc(100,80,45,0,7);x.fill();");
+    await page.evaluate(() => App.pickCastImages(App.S.project.script.cast[0].id));
+    await page.setInputFiles("#fileCast", [ali]);
+    await page.waitForFunction(() => App.S.project.script.cast[0].images.length === 1, null, { timeout: 10000 });
+    check((await page.evaluate(() => App.S.project.script.cast[0].images[0].role)) === "pose", "yüklenen ilk görsel 'duruş' rolü aldı");
+    await page.click("#scBuild");
+    await page.waitForFunction(() => !document.getElementById("scriptDialog").open, null, { timeout: 30000 });
+    await page.waitForTimeout(400);
+    const film = await page.evaluate(() => ({ n: App.S.project.scenes.length, names: App.S.project.scenes.map((s) => s.name), total: Exporter.totalDuration(App.S.project),
+      bubbles: App.S.project.scenes[1].layers.filter((l) => l.name.indexOf("Replik") === 0).length, aliFrames: (App.S.project.scenes[1].layers.find((l) => l.name === "Ali") || {}).frames, playing: App.S.playing, title: App.S.project.name }));
+    check(film.n === 4 && film.names[0] === "Başlık" && film.names[3] === "Son", "başlık + 2 sahne + SON üretildi: " + film.names.join(" | "));
+    check(film.total > 40 && film.bubbles === 4, "sahne 1'de 4 konuşma balonu, toplam " + film.total.toFixed(1) + " sn");
+    check(film.aliFrames && film.aliFrames.length === 1, "Ali yüklenen görselle kuruldu");
+    check(film.title === "Kayıp Top", "film adı senaryodaki BAŞLIK'tan alındı: " + film.title);
+    check(film.playing, "üretim sonrası film kendiliğinden oynuyor");
+    await page.evaluate(() => { App.pause(); App.switchScene(1, true); App.setTime(8); });
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: path.join(OUT, "06-senaryo.png") });
+    const gifSize = await page.evaluate(async () => { const b = await Exporter.exportGif(App.S.project, { fps: 8, scale: 0.25, range: 1 }, null, { cancelled: false }); return b.size; });
+    check(gifSize > 5000, "üretilen sahne GIF olarak kodlandı (" + gifSize + " bayt)");
+
+    console.log("19) Dar ekran düzeni");
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(OUT, "05-mobil.png") });

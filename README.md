@@ -18,6 +18,39 @@ otomatik kayıt `http://` üzerinden çalışır. (Dosyadan açılırsa GIF ana 
 **GitHub Pages ile yayınlamak için:** Settings → Pages → Source: *Deploy from a branch* → `main` / `/ (root)`.
 Derleme adımı yoktur; `.nojekyll` dosyası hazırdır.
 
+## Senaryodan otomatik film
+
+Üstteki **🎬 Senaryo** düğmesi (Ctrl+G): senaryoyu yaz, karakterlerin görsellerini yükle, **Filmi üret** de.
+Program sahneleri, arka planları, girişleri/çıkışları, konuşma balonlarını, duyguları ve hareketleri kendisi kurar;
+sonuç stüdyoda açılır, istediğin yeri elle düzeltip GIF/MP4 olarak alırsın.
+
+```
+BAŞLIK: Kayıp Top
+YAZAN: Sen
+
+SAHNE 1 - PARK - GÜNDÜZ
+Ali soldan girer.
+ALİ: Topum nerede? Sabahtan beri arıyorum.
+Ayşe sağdan koşarak girer.
+AYŞE (mutlu): Ali! Bak ne buldum!
+Ali zıplar.
+Ali Ayşe'ye doğru yürür.
+ANLATICI: Ve iki arkadaş oynamaya başladı.
+Ali ve Ayşe sağa çıkar.
+```
+
+- **Sahne başlığı:** `SAHNE 1 - MEKÂN - ZAMAN` (zaman: GÜNDÜZ, SABAH, AKŞAM, GECE). Yüklenen arka plan adı mekânla eşleşirse o kullanılır;
+  yoksa mekâna (park, orman, şehir, deniz, dağ, oda, uzay…) ve zamana göre çizilmiş bir arka plan üretilir (bulutlar akar).
+- **Replik:** `ALİ: metin` — balon karakterin başının üstünde çıkar, konuşurken karakter kıpırdar (konuşma karesi yüklediysen ağzı oynar).
+  Parantez içi duygu: `(mutlu)`, `(üzgün)`, `(kızgın)`, `(şaşkın)`, `(korkmuş)`, `(fısıldayarak)`, `(düşünceli)`, `(yorgun)`.
+- **Eylem:** düz cümle — girer, çıkar, yürür, koşar, zıplar, döner, düşer, kalkar, uçar, iner, el sallar, güler, ağlar, kızar, şaşırır,
+  korkar, dans eder, oturur, uyur, düşünür, bakar, büyür, küçülür, saklanır, bekler. Yön: `sağdan/soldan`, `sağa/sola`;
+  hedef: `Ali Ayşe'ye doğru yürür`; birlikte: `Ali ve Ayşe`, `Herkes`; süre: `2 saniye bekler`; hız: `koşarak`, `yavaşça`.
+- **Anlatıcı:** `ANLATICI: metin` → alt yazı.
+- **Karakter görselleri:** her karaktere bir duruş görseli yeter. İstersen ağzı açık kare (konuşma), adım kareleri (yürüme) ve
+  duygu görselleri ekle; dosya adından rol tahmin edilir (`ali-konusma.png`, `ayse-yuru1.png`, `ali-mutlu.png`). Görseli olmayan
+  karakter için isimli renkli bir yer tutucu çizilir.
+
 ## Üç adımda çizgi film
 
 1. **Görsel ekle.** PNG, JPG, WebP, GIF, SVG; sürükle-bırak ya da yapıştır. Birden çok çizimi
@@ -30,8 +63,8 @@ Derleme adımı yoktur; `.nojekyll` dosyası hazırdır.
 ## Özellikler
 
 - **Katmanlar:** görsel, çok kareli dizi (döngü / gidip gel / bir kez), metin ve konuşma balonu (yazı tipi, kontur, kuyruk, harf harf yazma).
-- **24 hareket efekti:**
-  - Sürekli: Zıpla, Süzül, Titre, Sallan, Dön, Nefes Al, Nabız, Yalpala, Yürü, Kay, Yanıp Sön, Çevir, Jöle, Daire Çiz
+- **26 hareket efekti:**
+  - Sürekli: Zıpla, Süzül, Titre, Sallan, Dön, Nefes Al, Nabız, Yalpala, Yürü, Kay, Yanıp Sön, Çevir, Jöle, Konuş, Eğil, Daire Çiz
   - Giriş: Kayarak, Belir, Büyüyerek, Düşerek, Patlayarak, Yazarak/Süpürerek
   - Çıkış: Kayarak, Kaybol, Küçülerek, Düşerek
 - **Anahtar kareler:** konum, ölçek, açı, opaklık; 13 geçiş eğrisi (poz-poz için *ani geçiş* dahil); sahnede gizmo ile taşı/ölçekle/döndür; zaman çizelgesinde sürükle.
@@ -53,6 +86,7 @@ Derleme adımı yoktur; `.nojekyll` dosyası hazırdır.
 | `model.js` | Proje veri modeli, varsayılanlar, dosya doğrulama |
 | `render.js` | Sahne çizimi, metin/balon, isabet testi, küçük resimler |
 | `exporter.js` | GIF / video / PNG-ZIP / proje dosyası üretimi, sahneleri birleştiren zaman çizgisi |
+| `director.js` | Senaryo ayrıştırıcı, eylem/duygu çözümleme, otomatik sahneleme, prosedürel arka plan ve yer tutucu karakterler |
 | `demo.js` | Tuvalde çizilen örnek film |
 | `lib/gif-encoder.js`, `lib/gif-worker.js` | Bağımlılıksız GIF89a kodlayıcı (medyan kesme, Floyd–Steinberg, LZW) |
 | `lib/mp4-muxer.js` | WebCodecs H.264 çıktısını MP4'e yazan muxer |
@@ -65,7 +99,7 @@ Derleme adımı yoktur; `.nojekyll` dosyası hazırdır.
 ## Testler
 
 ```bash
-npm test                 # birim testleri (GIF, ZIP, hareket motoru, MP4 muxer, WebM) — Node yeter
+npm test                 # birim testleri (GIF, ZIP, hareket motoru, MP4 muxer, WebM, senaryo ayrıştırıcı) — Node yeter
 npm i -D playwright && npx playwright install chromium
 npm run test:e2e         # tarayıcıda uçtan uca akış: içe alma, efekt, gizmo, anahtar kare, dışa aktarma, otomatik kayıt
 ```

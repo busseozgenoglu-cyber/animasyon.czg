@@ -316,11 +316,13 @@
     var btns = h("div", { class: "pill-row" },
       h("button", { type: "button", onclick: function () { App.pickFrames(L, "add"); } }, "+ Kare ekle"),
       h("button", { type: "button", onclick: function () { App.pickFrames(L, "replace"); } }, "Görseli değiştir"));
+    var fsInfo = (L.frameSets && L.frameSets.length) ? h("div", { class: "row" }, h("span", { class: "hint", style: "flex:1" }, L.frameSets.length + " zamanlı kare penceresi (senaryo üretimi: konuşma/yürüme/duygu)"),
+      h("button", { type: "button", class: "small", onclick: function () { L.frameSets = []; App.commit(); App.markDirty(); UI.renderProps(); } }, "Temizle")) : null;
     var seq = L.frames.length > 1 ? [
       sliderField("Kare hızı", { min: 1, max: 30, step: 1, unit: "fps" }, L.frameFps, function (v) { L.frameFps = v; App.markDirty(); }, function () { App.commit(); }),
       selectField("Oynatma", [{ value: "loop", label: "Döngü" }, { value: "pingpong", label: "Gidip gel" }, { value: "once", label: "Bir kez (son karede kal)" }], L.frameMode, function (v) { L.frameMode = v; App.commit(); App.markDirty(); })
     ] : h("p", { class: "hint" }, "Birden çok çizim eklerseniz kareler sırayla oynar (yürüme döngüsü, konuşan ağız…)."); 
-    return section("frames", L.frames.length > 1 ? "Kareler (" + L.frames.length + ")" : "Görsel", [strip, btns, seq]);
+    return section("frames", L.frames.length > 1 ? "Kareler (" + L.frames.length + ")" : "Görsel", [strip, btns, seq, fsInfo]);
   }
 
   function renderSceneProps(box, p, sc) {
@@ -697,5 +699,125 @@
     handle.addEventListener("pointerup", end); handle.addEventListener("pointercancel", end);
   }
 
-  UI.init = function () { bindTimeline(); bindDialogs(); bindLeftPanel(); bindLayoutPrefs(); };
+  /* ── Senaryodan film üretme penceresi ─────────────────────── */
+  var ROLE_LABELS = [["pose", "Duruş"], ["talk", "Konuşma karesi"], ["walk", "Yürüme karesi"], ["mutlu", "Mutlu"], ["uzgun", "Üzgün"], ["kizgin", "Kızgın"], ["saskin", "Şaşkın"], ["korkmus", "Korkmuş"]];
+  var previewTimer = 0;
+
+  UI.openScript = function () {
+    var App = root.App;
+    if (App.S.playing) App.pause();
+    App.ensureScript();
+    $("scHelp").textContent = root.Director.HELP;
+    $("scText").value = App.S.project.script.text || "";
+    UI.renderScriptDialog();
+    $("scriptDialog").showModal();
+    if (!$("scText").value) setTimeout(function () { $("scText").focus(); }, 50);
+  };
+
+  UI.renderScriptDialog = function () {
+    var App = root.App, p = App.S.project, sc = App.ensureScript();
+    var cast = $("scCast"); cast.innerHTML = "";
+    if (!sc.cast.length) cast.appendChild(h("div", { class: "notice" }, "Henüz karakter yok. “+ Karakter” ile ekle ya da senaryoyu yazıp “Senaryodan al” de."));
+    sc.cast.forEach(function (c) {
+      var pose = c.images.find(function (im) { return im.role === "pose"; }) || c.images[0];
+      var thumb = pose && p.assets[pose.assetId] ? h("img", { class: "sc-thumb", src: p.assets[pose.assetId].dataUrl, alt: "" }) : h("span", { class: "sc-thumb", title: "Görsel yok: yer tutucu çizilecek" }, "👤");
+      var nameInp = h("input", { type: "text", value: c.name, maxlength: "40", placeholder: "Karakter adı", onchange: function () { App.renameCast(c.id, nameInp.value); } });
+      var facing = h("select", { title: "Görselde karakterin yüzü hangi yöne bakıyor?", onchange: function () { c.facing = facing.value; App.commit(); } },
+        h("option", { value: "right", text: "Yüzü sağa" }), h("option", { value: "left", text: "Yüzü sola" }));
+      facing.value = c.facing || "right";
+      var imgs = h("div", { class: "sc-imgs" });
+      c.images.forEach(function (im) {
+        var a = p.assets[im.assetId]; if (!a) return;
+        var role = h("select", { onchange: function () { im.role = role.value; App.commit(); UI.renderScriptDialog(); } });
+        ROLE_LABELS.forEach(function (r) { role.appendChild(h("option", { value: r[0], text: r[1] })); });
+        role.value = im.role || "pose";
+        imgs.appendChild(h("div", { class: "sc-img" }, h("img", { src: a.dataUrl, alt: a.name, title: a.name }), role,
+          h("button", { type: "button", class: "rm", title: "Görseli çıkar", onclick: function () { App.removeCastImage(c.id, im.assetId); } }, "×")));
+      });
+      imgs.appendChild(h("button", { type: "button", class: "small", style: "align-self:flex-start", onclick: function () { App.pickCastImages(c.id); } }, "+ Görsel"));
+      cast.appendChild(h("div", { class: "sc-char" },
+        h("div", { class: "sc-char-head" }, thumb, nameInp, facing, h("button", { type: "button", class: "small danger", title: "Karakteri sil", onclick: function () { App.removeCastMember(c.id); } }, "✕")),
+        imgs));
+    });
+    var bgs = $("scBgs"); bgs.innerHTML = "";
+    sc.backgrounds.forEach(function (b) {
+      var a = p.assets[b.assetId]; if (!a) return;
+      var nm = h("input", { type: "text", value: b.name, maxlength: "60", placeholder: "Mekân adı (sahne başlığıyla eşleşir)", onchange: function () { b.name = nm.value.trim().slice(0, 60); App.commit(); UI.renderScriptPreview(); } });
+      bgs.appendChild(h("div", { class: "sc-bg" }, h("img", { src: a.dataUrl, alt: "" }), nm, h("button", { type: "button", class: "small danger", onclick: function () { App.removeBackground(b.id); } }, "✕")));
+    });
+    var st = sc.settings;
+    $("scCharHeight").value = Math.round(st.charHeight * 100); $("scCharHeightLabel").textContent = "%" + Math.round(st.charHeight * 100) + " (sahne yüksekliğine göre)";
+    $("scSpeed").value = st.speed; $("scBubble").value = st.bubbleStyle;
+    $("scTitle").checked = st.titleCard; $("scEnd").checked = st.endCard; $("scHeadings").checked = st.headings; $("scFade").checked = st.fade;
+    $("scSizeNote").textContent = "Film boyutu " + p.width + "×" + p.height + ", " + p.fps + " fps (sol paneldeki Film ayarlarından değişir).";
+    UI.renderScriptPreview();
+  };
+
+  UI.renderScriptPreview = function () {
+    var App = root.App, sc = App.ensureScript(), box = $("scPreview"), D = root.Director;
+    box.innerHTML = "";
+    var text = $("scText").value;
+    if (!text.trim()) { box.appendChild(h("div", { class: "muted" }, "Senaryoyu yazdıkça burada sahne, replik ve süre özeti görünür. Format için yukarıdaki rehbere bak ya da “Örnek senaryo”yu aç.")); return; }
+    var r;
+    try { r = D.analyze(text, sc.cast.filter(function (c) { return c.images.length; }).map(function (c) { return c.name; })); }
+    catch (e) { box.appendChild(h("div", { class: "err" }, "Senaryo okunamadı: " + e.message)); return; }
+    var st = r.stats;
+    box.appendChild(h("div", null, h("b", null, (r.ast.title ? "“" + r.ast.title + "” · " : "") + st.scenes + " sahne · " + st.lines + " replik · " + st.actions + " eylem" + (st.narrations ? " · " + st.narrations + " anlatım" : "")),
+      " · tahmini süre " + fmt(st.seconds, 0) + " sn"));
+    var chips = h("div", { class: "sc-chips" });
+    var withImg = sc.cast.filter(function (c) { return c.images.length; }).map(function (c) { return D.norm(c.name); });
+    r.names.forEach(function (nm) { var ok = withImg.indexOf(D.norm(nm)) >= 0; chips.appendChild(h("span", { class: "chip " + (ok ? "ok" : "ph"), title: ok ? "Görseli var" : "Görsel yok: yer tutucu çizilecek" }, (ok ? "✓ " : "◌ ") + nm)); });
+    if (r.names.length) box.appendChild(chips);
+    var warns = [];
+    st.charactersWithoutImage.forEach(function (nm) { warns.push("“" + nm + "” için görsel yok; renkli yer tutucu karakter kullanılacak (Karakterler bölümünden görsel ekleyebilirsin)."); });
+    st.unknownActions.slice(0, 6).forEach(function (a) { warns.push("Anlaşılamayan eylem: “" + a + "” (bekleme olarak işlenir)."); });
+    if (!st.lines && !st.actions) warns.push("Hiç replik ya da eylem yok. “ALİ: Merhaba” gibi satırlar ekle.");
+    if (warns.length) box.appendChild(h("ul", { class: "warn" }, warns.map(function (w) { return h("li", null, w); })));
+  };
+
+  function bindScriptDialog() {
+    var App = root.App;
+    $("btnScript").addEventListener("click", UI.openScript);
+    $("emptyScript").addEventListener("click", UI.openScript);
+    $("scText").addEventListener("input", function () {
+      App.ensureScript().text = $("scText").value;
+      clearTimeout(previewTimer); previewTimer = setTimeout(UI.renderScriptPreview, 250);
+    });
+    $("scText").addEventListener("change", function () { App.commit(); });
+    $("scSample").addEventListener("click", function () {
+      if ($("scText").value.trim() && !confirm("Mevcut senaryo örnekle değiştirilsin mi?")) return;
+      $("scText").value = root.Director.SAMPLE; App.ensureScript().text = root.Director.SAMPLE; App.commit(); UI.renderScriptPreview();
+    });
+    $("scAddChar").addEventListener("click", function () { App.addCastMember("Karakter " + (App.ensureScript().cast.length + 1)); UI.renderScriptDialog(); var inputs = $("scCast").querySelectorAll("input[type=text]"); if (inputs.length) { inputs[inputs.length - 1].focus(); inputs[inputs.length - 1].select(); } });
+    $("scAutoCast").addEventListener("click", function () { var n = App.autoCastFromScript(); UI.renderScriptDialog(); App.toast(n ? n + " karakter eklendi; görsellerini yükleyebilirsin" : "Senaryodaki tüm karakterler zaten listede"); });
+    $("scAddBg").addEventListener("click", function () { App.pickBackgrounds(); });
+    $("scCharHeight").addEventListener("input", function () { var v = parseInt($("scCharHeight").value, 10); App.ensureScript().settings.charHeight = v / 100; $("scCharHeightLabel").textContent = "%" + v + " (sahne yüksekliğine göre)"; });
+    $("scCharHeight").addEventListener("change", function () { App.commit(); });
+    $("scSpeed").addEventListener("change", function () { App.ensureScript().settings.speed = $("scSpeed").value; App.commit(); UI.renderScriptPreview(); });
+    $("scBubble").addEventListener("change", function () { App.ensureScript().settings.bubbleStyle = $("scBubble").value; App.commit(); });
+    [["scTitle", "titleCard"], ["scEnd", "endCard"], ["scHeadings", "headings"], ["scFade", "fade"]].forEach(function (pair) {
+      $(pair[0]).addEventListener("change", function () { App.ensureScript().settings[pair[1]] = $(pair[0]).checked; App.commit(); });
+    });
+    $("scBuild").addEventListener("click", function () {
+      var btn = $("scBuild"); btn.disabled = true; btn.textContent = "Üretiliyor…";
+      App.ensureScript().text = $("scText").value;
+      App.buildFromScript().then(function (res) {
+        btn.disabled = false; btn.textContent = "🎬 Filmi üret";
+        $("scriptDialog").close();
+        var msg = res.stats.scenes + " sahne, " + res.stats.layers + " katman, " + fmt(res.stats.seconds, 0) + " sn film üretildi" + (res.warnings.length ? " · " + res.warnings.length + " not (Senaryo penceresinde)" : "");
+        App.toast(msg, "ok");
+      }).catch(function (err) {
+        btn.disabled = false; btn.textContent = "🎬 Filmi üret";
+        var box = $("scPreview"); box.insertBefore(h("div", { class: "err" }, "Üretilemedi: " + (err && err.message || err)), box.firstChild);
+      });
+    });
+    $("scriptDialog").addEventListener("close", function () { App.ensureScript().text = $("scText").value; App.commit(); });
+  }
+  UI.showBuildWarnings = function (warnings) {
+    var box = $("scPreview");
+    if (!warnings.length) return;
+    box.insertBefore(h("ul", { class: "warn" }, warnings.slice(0, 12).map(function (w) { return h("li", null, w); })), box.firstChild);
+  };
+
+  UI.init = function () { bindTimeline(); bindDialogs(); bindLeftPanel(); bindLayoutPrefs(); bindScriptDialog(); };
 })(window);

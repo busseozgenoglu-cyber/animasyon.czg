@@ -172,4 +172,33 @@ console.log("WebM süre düzeltici");
   ok(fixWebmDuration(fixed, 1234) === fixed, "ikinci çağrı dosyayı değiştirmiyor");
 }
 
+/* ── Yönetmen: senaryo ayrıştırma ─────────────────────────── */
+console.log("Senaryo ayrıştırıcı (Director)");
+{
+  const D = require(path.join(ROOT, "director.js"));
+  const r = D.analyze(D.SAMPLE, []);
+  ok(r.ast.title === "Kayıp Top" && r.ast.author === "Sen", "başlık ve yazar okundu");
+  ok(r.stats.scenes === 2 && r.ast.scenes[0].place === "PARK" && r.ast.scenes[0].time === "gunduz" && r.ast.scenes[1].time === "aksam", "2 sahne; mekân ve zaman ayrıldı");
+  ok(r.stats.lines === 7 && r.stats.narrations === 1 && r.stats.actions === 12, "7 replik, 1 anlatım, 12 eylem");
+  ok(r.ast.speakers.join() === "Ali,Ayşe" && r.stats.charactersWithoutImage.length === 2 && r.stats.unknownActions.length === 0, "konuşanlar bulundu; örnekte anlaşılmayan eylem yok");
+  const names = ["Ali", "Ayşe"];
+  const a1 = D.analyzeAction("Ayşe sağdan koşarak girer.", names, []);
+  ok(a1.act === "enter" && a1.dir === "right" && a1.speed === "fast" && a1.subjects.join() === "Ayşe", "giriş: yön sağ, hızlı");
+  const a2 = D.analyzeAction("Ali Ayşe'ye doğru yürür.", names, []);
+  ok(a2.act === "walk_to" && a2.subjects.join() === "Ali" && a2.target === "Ayşe", "hedefe yürüme: özne ve hedef");
+  const a3 = D.analyzeAction("Ali ve Ayşe sola çıkar.", names, []);
+  ok(a3.act === "exit" && a3.to === "left" && a3.subjects.length === 2, "çoğul özne, sola çıkış");
+  const a4 = D.analyzeAction("3 saniye bekler.", names, ["Ali"]);
+  ok(a4.act === "wait" && a4.seconds === 3, "süreli bekleme");
+  const a5 = D.analyzeAction("Herkes zıplar.", names, []);
+  ok(a5.act === "jump" && a5.all === true, "herkes → tüm karakterler");
+  ok(D.analyzeAction("Ali alır.", names, []).act === null && D.analyzeAction("Ali alır.", names, []).subjects.join() === "Ali", "“alır” yanlışlıkla Ali'yi ek almış saymıyor; eylem bilinmiyor");
+  ok(D.emotionOf("üzgün") === "uzgun" && D.emotionOf("bağırarak") === "kizgin" && D.emotionOf("fısıldayarak") === "fisilti", "duygu sözlüğü");
+  const parts = D.splitLine("Bu çok uzun bir cümle. İkinci cümle burada! Üçüncü cümle de var mı? Evet var.", 40);
+  ok(parts.length >= 2 && parts.every((x) => x.length <= 40), "uzun replik cümle sınırından bölündü: " + parts.length + " parça");
+  ok(D.placeKind("Köy meydanı") === "kir" && D.placeKind("Şehir meydanı") === "sehir" && D.placeKind("Ormanın derinlikleri") === "orman" && D.placeKind("Ayşe'nin odası") === "ic" && D.placeKind("Plaj") === "deniz" && D.placeKind("Uzay istasyonu") === "uzay", "mekân türü sınıflandırması (eklerle)");
+  const ast2 = D.parse("PARK - GECE\nANLATICI: Gece oldu.\nİÇ. EV - SABAH\nALİ (fısıldayarak): Şşş.");
+  ok(ast2.scenes.length === 2 && ast2.scenes[0].time === "gece" && ast2.scenes[0].items[0].type === "narration" && ast2.scenes[1].place === "EV" && ast2.scenes[1].items[0].emotion === "fısıldayarak", "büyük harf başlık, İÇ./DIŞ. biçimi, anlatıcı ve parantez duygusu");
+}
+
 console.log("\nTÜM BİRİM TESTLERİ GEÇTİ (" + passed + " kontrol)" + (FFPROBE ? "" : " — ffprobe yok, dış doğrulamalar atlandı"));

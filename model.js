@@ -43,12 +43,16 @@
     };
   }
 
+  function newScript() {
+    return { text: "", cast: [], backgrounds: [], settings: { charHeight: 0.42, speed: "normal", bubbleStyle: "white", titleCard: true, endCard: true, headings: true, fade: true } };
+  }
+
   function newProject(opts) {
     opts = opts || {};
     var p = {
       version: VERSION, name: opts.name || "Adsız Film",
       width: opts.width || 1280, height: opts.height || 720, fps: opts.fps || 24,
-      audio: null, assets: {}, scenes: []
+      audio: null, assets: {}, scenes: [], script: newScript()
     };
     p.scenes.push(newScene("Sahne 1", opts.duration || 4));
     return p;
@@ -74,7 +78,7 @@
       anchor: Object.assign({ x: 0.5, y: 0.5 }, opts.anchor || {}),
       flipX: false, flipY: false,
       inPoint: opts.inPoint || 0, outPoint: opts.outPoint == null ? null : opts.outPoint,
-      effects: []
+      effects: [], frameSets: []
     };
     return L;
   }
@@ -122,6 +126,13 @@
     L.flipX = bool(raw.flipX, false); L.flipY = bool(raw.flipY, false);
     L.inPoint = num(raw.inPoint, 0, 0);
     L.outPoint = raw.outPoint == null ? null : num(raw.outPoint, null, 0);
+    L.frameSets = [];
+    if (Array.isArray(raw.frameSets)) raw.frameSets.forEach(function (fs) {
+      if (!fs || !Array.isArray(fs.frames)) return;
+      var frames = fs.frames.filter(function (f) { return typeof f === "string" && assets[f]; });
+      if (!frames.length) return;
+      L.frameSets.push({ start: num(fs.start, 0, 0), end: num(fs.end, 0, 0), frames: frames, fps: num(fs.fps, 8, 0.5, 60) });
+    });
     L.effects = [];
     if (Array.isArray(raw.effects)) raw.effects.forEach(function (e) {
       if (!e || !M.EFFECTS[e.type]) return;
@@ -152,6 +163,7 @@
         var a = raw.assets[id];
         if (!a || typeof a.dataUrl !== "string" || !/^data:image\//.test(a.dataUrl)) return;
         p.assets[id] = { id: id, name: str(a.name, "görsel", 120), dataUrl: a.dataUrl, width: Math.round(num(a.width, 1, 1)), height: Math.round(num(a.height, 1, 1)) };
+        if (typeof a.genKey === "string" && a.genKey.length < 120) p.assets[id].genKey = a.genKey;
       });
     }
     if (raw.audio && typeof raw.audio.dataUrl === "string" && /^data:audio\//.test(raw.audio.dataUrl)) {
@@ -174,7 +186,32 @@
       p.scenes.push(sc);
     });
     if (!p.scenes.length) p.scenes.push(newScene("Sahne 1", 4));
+    p.script = normalizeScript(raw.script, p.assets);
     return p;
+  }
+
+  var CAST_ROLES = ["pose", "talk", "walk", "mutlu", "uzgun", "kizgin", "saskin", "korkmus"];
+  function normalizeScript(raw, assets) {
+    var sc = newScript();
+    if (!raw || typeof raw !== "object") return sc;
+    sc.text = str(raw.text, "", 40000);
+    if (Array.isArray(raw.cast)) raw.cast.forEach(function (c) {
+      if (!c || typeof c.name !== "string" || !c.name.trim()) return;
+      var images = [];
+      if (Array.isArray(c.images)) c.images.forEach(function (im) { if (im && typeof im.assetId === "string" && assets[im.assetId]) images.push({ assetId: im.assetId, role: oneOf(im.role, CAST_ROLES, "pose") }); });
+      sc.cast.push({ id: typeof c.id === "string" ? c.id : M.uid("ch"), name: c.name.trim().slice(0, 40), facing: oneOf(c.facing, ["right", "left"], "right"), images: images });
+    });
+    if (Array.isArray(raw.backgrounds)) raw.backgrounds.forEach(function (b) {
+      if (!b || typeof b.assetId !== "string" || !assets[b.assetId]) return;
+      sc.backgrounds.push({ id: typeof b.id === "string" ? b.id : M.uid("bg"), assetId: b.assetId, name: str(b.name, "arka plan", 60) });
+    });
+    var st = raw.settings || {};
+    sc.settings = {
+      charHeight: num(st.charHeight, 0.42, 0.15, 0.8), speed: oneOf(st.speed, ["slow", "normal", "fast"], "normal"),
+      bubbleStyle: oneOf(st.bubbleStyle, ["white", "color"], "white"), titleCard: bool(st.titleCard, true), endCard: bool(st.endCard, true),
+      headings: bool(st.headings, true), fade: bool(st.fade, true)
+    };
+    return sc;
   }
 
   function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
@@ -198,8 +235,16 @@
     var used = {};
     project.scenes.forEach(function (s) {
       if (s.background && s.background.assetId) used[s.background.assetId] = true;
-      s.layers.forEach(function (l) { (l.frames || []).forEach(function (f) { used[f] = true; }); });
+      s.layers.forEach(function (l) {
+        (l.frames || []).forEach(function (f) { used[f] = true; });
+        (l.frameSets || []).forEach(function (fs) { (fs.frames || []).forEach(function (f) { used[f] = true; }); });
+      });
     });
+    var sc = project.script;
+    if (sc) {
+      (sc.cast || []).forEach(function (c) { (c.images || []).forEach(function (im) { used[im.assetId] = true; }); });
+      (sc.backgrounds || []).forEach(function (b) { used[b.assetId] = true; });
+    }
     return used;
   }
   function pruneAssets(project) {
@@ -209,7 +254,7 @@
 
   root.Model = {
     VERSION: VERSION, STAGE_PRESETS: STAGE_PRESETS, FONTS: FONTS,
-    newProject: newProject, newScene: newScene, newLayer: newLayer, newText: newText,
+    newProject: newProject, newScene: newScene, newLayer: newLayer, newText: newText, newScript: newScript, CAST_ROLES: CAST_ROLES,
     normalizeProject: normalizeProject, cloneLayer: cloneLayer, cloneScene: cloneScene, deepClone: deepClone,
     usedAssetIds: usedAssetIds, pruneAssets: pruneAssets
   };

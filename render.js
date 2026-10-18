@@ -129,7 +129,7 @@
       var lp = localPoint(L, tr, size, px, py);
       if (!lp || lp.u < 0 || lp.u > 1 || lp.v < 0 || lp.v > 1) continue;
       if (L.type === "text") return L;
-      var e = getEntry(L.frames[M.frameIndex(L, t)]);
+      var e = getEntry(M.frameAt(L, t));
       if (!e) return L;
       if (alphaAt(e, lp.u, lp.v) > 10) return L;
     }
@@ -218,7 +218,7 @@
     if (layer.type === "text") {
       drawText(ctx, layer, tr);
     } else {
-      var e = getEntry(layer.frames[M.frameIndex(layer, t)]);
+      var e = getEntry(M.frameAt(layer, t));
       if (e) {
         if (tr.reveal < 1) { ctx.beginPath(); ctx.rect(ox, oy, size.w * tr.reveal, size.h); ctx.clip(); }
         ctx.drawImage(e.img, ox, oy, size.w, size.h);
