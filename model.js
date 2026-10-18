@@ -182,7 +182,7 @@
       Object.keys(raw.clips).forEach(function (key) {
         var c = raw.clips[key];
         if (!c || key.length > 80 || typeof c.dataUrl !== "string" || !/^data:audio\//.test(c.dataUrl) || !(+c.duration > 0)) return;
-        p.clips[key] = { dataUrl: c.dataUrl, duration: num(c.duration, 1, 0.05, 600), text: str(c.text, "", 400) };
+        p.clips[key] = { dataUrl: c.dataUrl, duration: num(c.duration, 1, 0.05, 600), text: str(c.text, "", 400), mouth: (typeof c.mouth === "string" && /^[0-2]*$/.test(c.mouth)) ? c.mouth.slice(0, 8000) : "" };
       });
     }
     raw.scenes.forEach(function (s, i) {

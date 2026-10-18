@@ -72,6 +72,10 @@ Ali ve Ayşe sağa çıkar.
   önizlemede çalar, WebM/MP4 dışa aktarımına müzikle birlikte karışır. Sihirbazın ayarlarından kapatılabilir.
 - **Hayvanlar:** `Karabaş havlar.`, `Pamuk miyavlar.`, `Cik cıvıldar.`, `Karabaş kuyruk sallar.` → ses balonu ve hareket.
 - **Kalabalık:** 4+ karakterde boylar kendiliğinden küçülür, sığmayınca arka sıra açılır (arka sıra daha küçük ve yukarıda, önü kapatmaz).
+- **Canlandırma ayrıntıları:** konuşurken ağız gerçek sese (seslendirme klibinin zarfı) ya da metnin hece ritmine göre açılıp kapanır;
+  yürürken hareket yönüne eğilir, dönüşte esner, varışta yerine oturur; zıplayınca ve düşünce yerde toz bulutu çıkar; boş anlarda ufak kıpırdanır;
+  dinleyenler ünlemde irkilir, öfkeli replikte geri çekilir, üzgün replikte yaklaşır. Kamera ipucu olmayan konuşmalı sahnelerde kamera fark edilmeden yaklaşır.
+  Çizilen arka planlarda ortam canlıdır: gündüz kuşlar geçer, kırda ve ormanda kelebekler uçar, gece ateşböcekleri ve parıldayan yıldızlar, akşam ve ormanda düşen yapraklar, uzayda kuyruklu yıldız.
 - **Karakter görselleri:** her karaktere bir duruş görseli yeter; saydam PNG'lerin boş kenarları kendiliğinden kırpılır. İstersen ağzı açık kare (konuşma), adım kareleri (yürüme),
   göz kırpma karesi ve duygu görselleri ekle; dosya adından rol tahmin edilir (`ali-konusma.png`, `ayse-yuru1.png`, `ali-kirpma.png`, `ali-mutlu.png`).
   Her karakter yerde yumuşak bir **gölge** taşır (zıplayınca küçülür) ve göz kırpma karesi varsa 2–5 saniyede bir **göz kırpar**.

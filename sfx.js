@@ -85,6 +85,31 @@
       return p;
     })).then(function (bufs) { return bufs.filter(Boolean).length; });
   }
+  /* Konuşma zarfı: klipten 12 kare/sn ağız düzeyi dizisi (0 kapalı, 1 yarım, 2 açık); uzun açık diziler kırılır */
+  function envelopeOf(buf, fps) {
+    var ch = buf.getChannelData(0), win = Math.max(1, Math.round(buf.sampleRate / fps)), n = Math.ceil(ch.length / win), rms = [], peak = 0;
+    for (var i = 0; i < n; i++) {
+      var s = 0, a = i * win, b = Math.min(ch.length, a + win);
+      for (var j = a; j < b; j++) s += ch[j] * ch[j];
+      var v = Math.sqrt(s / Math.max(1, b - a)); rms.push(v); if (v > peak) peak = v;
+    }
+    if (peak <= 1e-5) return rms.map(function () { return "0"; }).join("");
+    var out = rms.map(function (v) { var r = v / peak; return r < 0.12 ? 0 : r < 0.42 ? 1 : 2; }), run = 0;
+    for (var q = 0; q < out.length; q++) { if (out[q] > 0) { run++; if (run > 4) { out[q] = 0; run = 0; } } else run = 0; }
+    return out.join("");
+  }
+  function mouthEnvelope(dataUrl, fps) {
+    fps = fps || 12;
+    if (typeof AudioContext === "undefined") return Promise.resolve("");
+    var ctx; try { ctx = decoder(); } catch (e) { return Promise.resolve(""); }
+    return new Promise(function (resolve) {
+      try {
+        var ab = dataUrlToArrayBuffer(dataUrl), done = function (buf) { try { resolve(envelopeOf(buf, fps)); } catch (e) { resolve(""); } };
+        var r = ctx.decodeAudioData(ab, done, function () { resolve(""); });
+        if (r && typeof r.then === "function") r.then(done, function () { resolve(""); });
+      } catch (e) { resolve(""); }
+    });
+  }
   function hasPendingClips(project) {
     var clips = project.clips || {};
     return (project.scenes || []).some(function (sc) { return (sc.sfx || []).some(function (q) { return q.type === "clip" && clips[q.clip] && !(clipCache.get(q.clip) instanceof AudioBuffer); }); });
@@ -131,5 +156,5 @@
     },
     stop: function () { live.token++; if (live.stopFn) { live.stopFn(); live.stopFn = null; } }
   };
-  root.Sfx = { TYPES: Object.keys(SYN), cues: cues, schedule: schedule, prepare: prepare, live: live };
+  root.Sfx = { TYPES: Object.keys(SYN), cues: cues, schedule: schedule, prepare: prepare, mouthEnvelope: mouthEnvelope, live: live };
 })(window);

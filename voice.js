@@ -176,7 +176,10 @@
     var lines = D.voiceLines(project).filter(function (l) { return !project.clips[l.key]; });
     var all = D.voiceLines(project).length;
     out.total = lines.length; out.skipped = all - lines.length;
-    if (!lines.length) return Promise.resolve(out);
+    // Eski projelerden gelen zarfsız klipler: ağız dizisi yerel olarak hesaplanır (sunucu gerekmez)
+    var fill = Object.keys(project.clips).filter(function (kk) { return project.clips[kk].mouth == null || project.clips[kk].mouth === ""; });
+    var fillStep = (fill.length && root.Sfx && root.Sfx.mouthEnvelope) ? Promise.all(fill.map(function (kk) { return root.Sfx.mouthEnvelope(project.clips[kk].dataUrl, 12).then(function (m) { project.clips[kk].mouth = m || ""; }); })) : Promise.resolve();
+    if (!lines.length) return fillStep.then(function () { return out; });
     var pre = (state.status === "ok" && Date.now() - state.checkedAt < 60000) ? Promise.resolve(state) : check();
     return pre.then(function (st) {
       if (st.status !== "ok") {
@@ -197,8 +200,10 @@
         if (voiceId && !voiceExists(voiceId)) { missingVoice[voiceId] = true; voiceId = null; }
         return synth({ text: line.text, voiceId: voiceId, emotion: line.emotion, style: line.style }, { signal: opts.signal, onJob: function (j) { report({ eta: j.eta_s, position: j.position }); } })
           .then(function (clip) {
-            project.clips[line.key] = { dataUrl: clip.dataUrl, duration: clip.duration, text: line.text };
-            out.made++;
+            return (root.Sfx && root.Sfx.mouthEnvelope ? root.Sfx.mouthEnvelope(clip.dataUrl, 12) : Promise.resolve("")).then(function (m) {
+              project.clips[line.key] = { dataUrl: clip.dataUrl, duration: clip.duration, text: line.text, mouth: m || "" };
+              out.made++;
+            });
           }, function (e) {
             if (e && e.aborted) { stopped = true; out.warnings.push("Seslendirme durduruldu: " + out.made + "/" + lines.length + " parça seslendirildi, kalanlar sessiz."); return; }
             out.failed++;
