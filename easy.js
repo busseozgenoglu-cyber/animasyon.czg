@@ -272,6 +272,7 @@
     var rawT = preview.T0 + (now - preview.wall) / 1000;
     preview.T = rawT % total;
     if (rawT >= total) { preview.T0 = preview.T; preview.wall = now; if (root.Sfx) root.Sfx.live.play(project(), preview.T); if (project().audio) { try { $("audioEl").currentTime = preview.T; } catch (e) { /* yoksay */ } } }
+    if (project().audio && root.Sfx && root.Sfx.duck) { var dv = (project().audio.volume == null ? 1 : project().audio.volume) * root.Sfx.duck(project(), preview.T); var ae = $("audioEl"); if (Math.abs(ae.volume - dv) > 0.01) ae.volume = dv; }
     drawPreview();
     preview.raf = requestAnimationFrame(tick);
   }

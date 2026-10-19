@@ -307,6 +307,10 @@
               try {
                 var offset = r.start, dur = r.end - r.start;
                 if (offset < source.buffer.duration) source.start(when, offset, Math.min(dur, source.buffer.duration - offset));
+                if (root.Sfx && root.Sfx.duck) {   // konuşma kliplerinde müzik kısılır
+                  var vol = project.audio.volume == null ? 1 : project.audio.volume;
+                  sfxCues.forEach(function (q) { if (q.type !== "clip" || !(q.dur > 0)) return; var t0 = when + (q.t - r.start) - 0.15, t1 = when + (q.t - r.start) + q.dur + 0.1; if (t1 <= when) return; gain.gain.setTargetAtTime(vol * root.Sfx.DUCK, Math.max(when, t0), 0.08); gain.gain.setTargetAtTime(vol, Math.max(when, t1), 0.15); });
+                }
               } catch (e) { /* ses olmadan devam */ }
             }
             if (sfxCues.length && sfxDest) { try { root.Sfx.schedule(audioCtx, sfxDest, sfxCues, r.start, when, 0.45, 1); } catch (e) { /* efektsiz devam */ } }

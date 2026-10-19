@@ -70,12 +70,17 @@ Ali ve Ayşe sağa çıkar.
   Kamera hareketi sıradaki replikle örtüşür; stüdyoda sahne özelliklerindeki **Kamera** bölümünden ve zaman çizelgesindeki kamera satırından elle de kurulur.
 - **Ses efektleri:** balon açılırken *pop*, giriş/çıkışta *vınn*, zıplamada *boing*, düşmede *güm*, alkış, başlıkta çan. Dosya gerekmez (tarayıcıda sentezlenir);
   önizlemede çalar, WebM/MP4 dışa aktarımına müzikle birlikte karışır. Sihirbazın ayarlarından kapatılabilir.
+- **Hava durumu:** sahne başlığına `YAĞMURLU`, `KARLI`, `SİSLİ` ekle (`SAHNE 2 - PARK - AKŞAM - YAĞMURLU`): yağmur ya da kar karakterlerin önünde akar, ton soğur.
+- **Nesneler:** `Ali topu Ayşe'ye atar.` → top kavisle uçar ve Ayşe'nin eline gelir; `Ayşe topu yakalar.` (top, elma, taş, kartopu). Sarılınca kalpler yükselir,
+  düşünce baş döndüren yıldızlar döner, korkuda ter damlası düşer, koşuda hız çizgileri çıkar.
 - **Hayvanlar:** `Karabaş havlar.`, `Pamuk miyavlar.`, `Cik cıvıldar.`, `Karabaş kuyruk sallar.` → ses balonu ve hareket.
 - **Kalabalık:** 4+ karakterde boylar kendiliğinden küçülür, sığmayınca arka sıra açılır (arka sıra daha küçük ve yukarıda, önü kapatmaz).
 - **Canlandırma ayrıntıları:** konuşurken ağız gerçek sese (seslendirme klibinin zarfı) ya da metnin hece ritmine göre açılıp kapanır; cümle başlarında el-kol jestleri yapılır,
   dinleyen karakter konuşana bakar (göz yönü); yürüyüş 4 karelik temas–geçiş döngüsüyle ve adım sesleriyle; zıplamadan önce çömelme (hazırlık);
   sahneler arası sırayla silme ve siyaha geçiş, son sahnede iris kapanışı; gece mavisi / akşam turuncusu / sabah sıcaklığı renk tonu;
   kamera hareketinde arka plan ve bulutlar daha az kayar (paralaks derinliği) ve kamera konuşana doğru fark edilmeden kayar;
+  kızgın, şaşkın, korkmuş, üzgün ve fısıltılı repliklerde kamera konuşana yakın çekim yapar; soru ve ünlemden sonra kısa bir tepki beklemesi vardır;
+  seslendirme sırasında müzik kısılır (önizlemede ve videoda); başlık kartında parıltılar süzülür;
   yürürken hareket yönüne eğilir, dönüşte esner, varışta yerine oturur; zıplayınca ve düşünce yerde toz bulutu çıkar; boş anlarda ufak kıpırdanır;
   dinleyenler ünlemde irkilir, öfkeli replikte geri çekilir, üzgün replikte yaklaşır. Kamera ipucu olmayan konuşmalı sahnelerde kamera fark edilmeden yaklaşır.
   Çizilen arka planlarda ortam canlıdır: gündüz kuşlar geçer, kırda ve ormanda kelebekler uçar, gece ateşböcekleri ve parıldayan yıldızlar, akşam ve ormanda düşen yapraklar, uzayda kuyruklu yıldız.

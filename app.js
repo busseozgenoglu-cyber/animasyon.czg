@@ -782,6 +782,7 @@
       }
       S.time = M.quantizeTime(Math.min(t, App.scene().duration - fd), fps);
       if (S.time < 0) S.time = 0;
+      if (S.project.audio && root.Sfx && root.Sfx.duck) { var dv = (S.project.audio.volume == null ? 1 : S.project.audio.volume) * root.Sfx.duck(S.project, App.globalTime()); if (Math.abs(audioEl.volume - dv) > 0.01) audioEl.volume = dv; }
       UI.updatePlayhead(); UI.updateTimeLabel();
       S.dirty = true;
     }

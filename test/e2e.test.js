@@ -235,6 +235,22 @@ async function png(page, name, w, h, drawSrc) {
     // Geçiş kareleri: iris ortada daire bırakır, silme soldan kapatır
     const trPix = await page.evaluate(() => { const p = App.S.project, c = document.createElement("canvas"); c.width = p.width; c.height = p.height; const ctx = c.getContext("2d", { willReadFrequently: true }); const s2 = p.scenes[2], off = Exporter.sceneOffset(p, 2); Exporter.renderFrame(p, off + s2.duration - 0.4, c, ctx); const mid = ctx.getImageData(p.width / 2, p.height / 2, 1, 1).data, corner = ctx.getImageData(10, 10, 1, 1).data; return { midBright: mid[0] + mid[1] + mid[2], cornerBright: corner[0] + corner[1] + corner[2] }; });
     check(trPix.cornerBright < 30 && trPix.midBright > 60, "iris geçişi: köşe siyah, orta görünür");
+    // Hava durumu, nesneler ve duygusal yakın çekim: küçük bir senaryo
+    const fx = await page.evaluate(async () => {
+      const keep = App.ensureScript().text;
+      App.ensureScript().text = "SAHNE 1 - PARK - GÜNDÜZ - YAĞMURLU\nALİ: Topu at bana!\nAyşe topu Ali'ye atar.\nAli topu yakalar.\nAli koşar.\nAli düşer.\nAYŞE (şaşkın): Ali! İyi misin? Çok korktum!\nAli kalkar.\nALİ (korkmuş): Az kalsın kafamı çarpıyordum.\nAyşe Ali'ye sarılır.";
+      const r = await App.buildFromScript({ autoplay: false });
+      const s = App.S.project.scenes.find((x) => /PARK/.test(x.name));
+      const names = s.layers.map((l) => l.name), top = s.layers.find((l) => l.name === "Top");
+      const out = { warnings: r.warnings, rain: names.filter((n2) => n2 === "Yağmur").length, top: top ? { xk: top.tracks.x.length, yk: top.tracks.y.length, spin: top.effects.some((e) => e.type === "spin") } : null,
+        stars: names.filter((n2) => n2 === "Yıldızlar").length, hearts: names.filter((n2) => n2 === "Kalp").length, drops: names.filter((n2) => n2 === "Damla").length, speed: names.filter((n2) => n2 === "Hız çizgileri").length,
+        zoomMax: Math.max.apply(null, s.camera.tracks.zoom.map((k2) => k2.v)), grade: s.grade && s.grade.color, rainTop: names.lastIndexOf("Yağmur") > names.findIndex((n2) => n2 === "Ali"), duck: Sfx.duck(App.S.project, 0) };
+      App.ensureScript().text = keep;
+      await App.buildFromScript({ autoplay: false });
+      return out;
+    });
+    check(fx.rain === 2 && fx.rainTop && fx.grade === "#9fb6c8" && fx.top && fx.top.xk === 2 && fx.top.yk >= 3 && fx.top.spin, "yağmurlu sahne: 2 yağmur katmanı karakterlerin önünde, soğuk ton; top kavisli uçuşla atıldı ve koşunca yere düştü (" + (fx.top ? fx.top.yk : 0) + " y anahtarı)");
+    check(fx.stars === 1 && fx.hearts === 3 && fx.drops >= 1 && fx.speed === 1 && fx.zoomMax >= 1.27, "düşünce yıldızlar, sarılınca kalpler, korkuda ter damlası, koşuda hız çizgileri, duygusal yakın çekim (" + fx.zoomMax + "x)");
     check(film.title === "Kayıp Top", "film adı senaryodaki BAŞLIK'tan alındı: " + film.title);
     check(film.playing, "üretim sonrası film kendiliğinden oynuyor");
     await page.evaluate(() => { App.pause(); App.switchScene(1, true); App.setTime(8); });
@@ -338,6 +354,8 @@ async function png(page, name, w, h, drawSrc) {
     check(mock.requests.tts === 3 && (await page.evaluate(() => Object.keys(App.S.project.clips).length)) === 3, "yeniden üretimde klipler önbellekten geldi (yeni istek yok)");
     const live = await page.evaluate(async () => { await Sfx.prepare(App.S.project); Easy.goto(3); await new Promise((r) => setTimeout(r, 600)); const btn = document.getElementById("wzPlay"); if (!/Durdur/.test(btn.textContent)) btn.click(); await new Promise((r) => setTimeout(r, 500)); const playing = /Durdur/.test(btn.textContent), ctx = !!Sfx.live.ctx, armed = !!Sfx.live.stopFn; if (playing) btn.click(); return { playing, ctx, armed }; });
     check(live.playing && live.ctx && live.armed, "önizleme klipleri çözülmüş hâlde seslendirmeyle oynadı (ses bağlamı ve zamanlayıcı etkin)");
+    const duck = await page.evaluate(() => { const p = App.S.project, s = p.scenes[1], off = Exporter.sceneOffset(p, 1), q = s.sfx.find((c) => c.type === "clip"); return { during: Sfx.duck(p, off + q.t + 0.5), before: Sfx.duck(p, off + 0.2) }; });
+    check(duck.during === 0.35 && duck.before === 1, "konuşma sırasında müzik kısılır (0,35), konuşma yokken tam ses");
     const [dlVo] = await Promise.all([page.waitForEvent("download", { timeout: 120000 }), page.evaluate(() => Exporter.exportVideo(App.S.project, { format: "webm", scale: 0.5, quality: "low", range: 1 }, null, { cancelled: false }).then((r) => Exporter.download(r.blob, "replik.webm")))]);
     await dlVo.saveAs(path.join(OUT, "replik.webm"));
     check(fs.statSync(path.join(OUT, "replik.webm")).size > 2000, "seslendirmeli sahne WebM olarak üretildi (ses ffprobe ile kontrol edilir)");

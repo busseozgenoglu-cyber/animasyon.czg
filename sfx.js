@@ -157,5 +157,22 @@
     },
     stop: function () { live.token++; if (live.stopFn) { live.stopFn(); live.stopFn = null; } }
   };
-  root.Sfx = { TYPES: Object.keys(SYN), cues: cues, schedule: schedule, prepare: prepare, mouthEnvelope: mouthEnvelope, live: live };
+  /* Konuşma sırasında müzik kısılır (sidechain): T anında bir klip çalıyorsa 0,35, değilse 1 */
+  var DUCK = 0.35;
+  function duck(project, T) {
+    var acc = 0, clips = project.clips || {};
+    for (var i = 0; i < (project.scenes || []).length; i++) {
+      var sc = project.scenes[i];
+      for (var j = 0; j < (sc.sfx || []).length; j++) {
+        var q = sc.sfx[j];
+        if (q.type !== "clip") continue;
+        var c = clips[q.clip]; if (!c) continue;
+        var s0 = acc + q.t - 0.15, s1 = acc + q.t + c.duration + 0.1;
+        if (T >= s0 && T < s1) return DUCK;
+      }
+      acc += sc.duration;
+    }
+    return 1;
+  }
+  root.Sfx = { TYPES: Object.keys(SYN), cues: cues, schedule: schedule, prepare: prepare, mouthEnvelope: mouthEnvelope, duck: duck, DUCK: DUCK, live: live };
 })(window);
