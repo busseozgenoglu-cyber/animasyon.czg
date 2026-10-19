@@ -131,7 +131,10 @@
     sc.backgrounds.forEach(function (b) {
       var a = p.assets[b.assetId]; if (!a) return;
       var nm = h("input", { type: "text", value: b.name, maxlength: "60", placeholder: "Mekân adı (ör. park)", onchange: function () { b.name = nm.value.trim().slice(0, 60); App().commit(); renderSummary(); } });
-      box.appendChild(h("div", { class: "sc-bg" }, h("img", { src: a.dataUrl, alt: "" }), nm, h("button", { type: "button", class: "small danger", onclick: function () { App().removeBackground(b.id); renderBgs(); } }, "Sil")));
+      var gl = h("div", { class: "sc-groundline", style: "top:" + Math.round((b.ground || 0.9) * 100) + "%" });
+      var gr = h("input", { type: "range", min: "50", max: "100", step: "1", value: String(Math.round((b.ground || 0.9) * 100)), title: "Zemin çizgisi: karakterlerin ayak bastığı yükseklik (resme göre)",
+        oninput: function () { gl.style.top = gr.value + "%"; }, onchange: function () { b.ground = Math.max(0.5, Math.min(1, +gr.value / 100)); App().commit(); } });
+      box.appendChild(h("div", { class: "sc-bg" }, h("div", { class: "sc-thumb" }, h("img", { src: a.dataUrl, alt: "" }), gl), nm, h("label", { class: "sc-ground" }, "Zemin ", gr), h("button", { type: "button", class: "small danger", onclick: function () { App().removeBackground(b.id); renderBgs(); } }, "Sil")));
     });
   }
 

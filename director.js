@@ -89,7 +89,7 @@
   var ACTIONS = [
     ["knock", /\b(kapi (?:[a-z]+ )?(calar|calinir|calindi|vurulur|vuruldu|tiklanir|tiklandi|caliyor)|kapiyi (calar|caldi|vurur|vurdu)|tak tak)\b/],   // "Kapı çalar.", "Kapı yine çalar.", "Kapı zili çalar."
     ["ring", /\b((telefon|telefonu|cep telefonu|zil|alarm|saat|calar saat) (?:[a-z]+ )?(calar|caldi|caliyor|oter|otuyor|ottu)|zirr|cin cin|telefon sesi)\b/],   // "Telefon çalar.", "Ali'nin telefonu ısrarla çalar."
-    ["turn", /\b(arkasini don|arkasina don|geri don|ters don)/],
+    ["turn", /\b(arkasini don|arkasina don|geri don|ters don|(sola|saga|geriye|arkaya|ona|bana|kameraya|one) (doner|dondu|donuyor|donup)|yuzunu (cevirir|cevirdi|doner|dondu)|[a-z]+'?(ye|ya) (doner|dondu|donuyor))/],   // "sola döner", "Ayşe'ye döner" = yön değiştirir (kendi etrafında dönmek "döner" tek başına)
     ["hug", /\b(sarilir|sarildi|kucaklar|kucakladi|sarilarak)\b/],
     ["back", /\b(geri cekilir|geri cekildi|gerisin geri|geri adim atar|bir adim geri|geriler|geriledi)\b/],
     ["wake", /\b(uyanir|uyandi|gozlerini acar|uykudan kalkar)\b/],
@@ -178,7 +178,7 @@
     var speed = /kosarak|hizla|hizli|cabucak|firlayarak|telasla/.test(n) ? "fast" : /yavasca|agir agir|yavas|usulca|sessizce|sakin/.test(n) ? "slow" : "normal";
     var sec = n.match(/(\d+(?:[.,]\d+)?)\s*(saniye|sn)\b/);
     var simultaneous = /\b(ayni anda|bu sirada|o sirada|ayni zamanda)\b/.test(n);
-    var subjects = found.slice(), target = null, targeted = act === "walk_to" || act === "look" || act === "hug" || act === "throw";
+    var subjects = found.slice(), target = null, targeted = act === "walk_to" || act === "look" || act === "hug" || act === "throw" || act === "turn";
     if (targeted && found.length >= 2) { target = found[1]; subjects = [found[0]]; }
     else if (targeted && found.length === 1 && lastSubjects && lastSubjects.length && lastSubjects[0] !== found[0] && /\b(ona|yanina|dogru|onu)\b/.test(n)) { target = found[0]; subjects = lastSubjects.slice(0, 1); }
     if (!subjects.length && !all && lastSubjects && lastSubjects.length && /^(o |sonra |ardindan |ve |hemen )/.test(n + " ")) subjects = lastSubjects.slice();
@@ -680,7 +680,8 @@
       def.walk = [0, 1].map(function (i) {
         return genAsset("walkgen:" + def.pose + ":" + i, String(a.name || def.name).replace(/\.[a-z0-9]+$/i, "") + " (adım " + (i + 1) + ").png", function () {
           var c = canvas(w, h), x = c.getContext("2d");
-          x.drawImage(e.img, 0, 0, w, hip, 0, 0, w, hip);   // gövde olduğu gibi
+          var tsw = (i === 0 ? -1 : 1) * 0.05;   // gövde her adımda hafifçe ters yöne salınır (kalça sabit)
+          x.save(); x.transform(1, 0, tsw, 1, -hip * tsw, 0); x.drawImage(e.img, 0, 0, w, hip, 0, 0, w, hip); x.restore();
           var mv = i === 0 ? [0, cx] : [cx, w - cx], st = i === 0 ? [cx, w - cx] : [0, cx], sh = i === 0 ? 0.16 : -0.16;
           x.drawImage(e.img, st[0], hip, st[1], legH, st[0], hip, st[1], legH);   // yerde duran bacak
           x.save(); x.transform(1, 0, sh, 1, -hip * sh, -lift); x.drawImage(e.img, mv[0], hip, mv[1], legH, mv[0], hip, mv[1], legH); x.restore();   // adım atan bacak: kalçadan içe makas + ayak kalkar
@@ -764,6 +765,7 @@
       var sc = Model.newScene((sa.place || "Sahne " + sa.index) + (sa.time ? " · " + TIME_LABEL[sa.time] : ""), 4);
       var time = sa.time || "gunduz", kind = placeKind(sa.place), outdoor = kind !== "ic" && kind !== "uzay";
       var userBg = pickBackground(sa);
+      var gY = userBg && userBg.ground ? Math.round(H * Math.max(0.5, Math.min(1, userBg.ground))) : groundY;   // kullanıcı arka planında zemin çizgisi ayarlanabilir (ayaklar yere basar)
       sc.grade = GRADES[time] || null;   // günün saatine göre renk tonu (karakterler sahneye oturur)
       var weather = sa.weather || "", storm = weather === "firtina", rainy = weather === "yagmur" || storm, windy = weather === "ruzgar" || storm;
       if (storm && outdoor) sc.grade = time === "gece" ? { color: "#6b7aa8", alpha: 0.6 } : { color: "#7d8fa6", alpha: 0.5 };   // fırtına: koyu, soğuk ton
@@ -839,7 +841,7 @@
         else { var bi = 0, bd = 9; free.forEach(function (s, i) { if (Math.abs(s - 0.5) < bd) { bd = Math.abs(s - 0.5); bi = i; } }); pick = free.splice(bi, 1)[0]; }
         if (pick == null) pick = 0.5;
         chars[kn] = { def: cast[kn], slotX: Math.round(pick * W), x: Math.round(pick * W), layer: null, layers: [], facing: 0, present: false, fallen: false, flying: false, fl: null, sitting: false, busy: [],
-          row: row, ground: row ? groundY - Math.round(H * 0.07) : groundY, charH: charH * cast[kn].size * crowd * (row ? 0.85 : 1) };
+          row: row, ground: row ? gY - Math.round(H * 0.07) : gY, charH: charH * cast[kn].size * crowd * (row ? 0.85 : 1) };
       });
       var rowOf = new Map();
 
@@ -866,8 +868,8 @@
         c.facing = dirSign;
         fx(c.layer, "jelly", Math.max(0, t - 0.04), t + 0.22, { strength: 9, speed: 4 });   // dönüşü satan küçük esneme
         var cur = M.trackValue(c.layer.tracks.sx, t, c.layer.base.sx);
-        key(c.layer, "sx", Math.max(0, t - 0.01), cur, "step");
-        key(c.layer, "sx", t, Math.abs(cur) * want, "step");
+        key(c.layer, "sx", Math.max(0, t - 0.14), cur, "easeInOutQuad");   // incelip dönüş: sıfırdan geçerek aynalanır (ani çevirme yok)
+        key(c.layer, "sx", t + 0.02, Math.abs(cur) * want, "easeInOutQuad");
       }
       function ensurePresent(kn, t) {
         var c = chars[kn], L = charLayer(kn);
@@ -952,7 +954,8 @@
         key(L, "x", t0, from, "linear"); key(L, "x", t0 + dur, nx, "linear");   // sabit hız: adımlar yere oturur
         walkCycle(kn, t0, t0 + dur, g.steps, nx > from ? 1 : -1);
         if (mode === "run") {
-          puff(from, c.ground, t0, 0.7);
+          fx(L, "lean", Math.max(0, t0 - 0.22), t0 + 0.05, { angle: -(nx > from ? 1 : -1) * 9, ramp: 0.1 });   // hazırlık: geriye yaslanıp fırlar
+          puff(from, c.ground, t0, 0.7); puff(nx, c.ground, t0 + dur - 0.05, 0.8);   // kalkışta ve durunca toz
           var dirR = nx > from ? 1 : -1, sid = genAsset("speed", "hiz.png", drawSpeedLines), ss = 0.5 * k * (c.charH / (0.42 * base));
           var SL2 = sprite("Hız çizgileri", sid, from - dirR * charW(kn) * 0.7, c.ground - c.charH * 0.5, ss, t0 + 0.1, t0 + dur, { opacity: 0.75, flip: dirR < 0 });
           key(SL2, "x", t0 + 0.1, from - dirR * charW(kn) * 0.7, "linear"); key(SL2, "x", t0 + dur, nx - dirR * charW(kn) * 0.7, "linear");
@@ -1042,6 +1045,14 @@
       }
       function bubble(kn, text, a, b, emotion, inner) {   // inner: düşünce balonu (içinden konuşma)
         var c = chars[kn], cx = curX(kn, a), headTop = c.ground - c.charH;
+        if (settings.bubbleStyle === "none") return null;   // balonsuz: yalnız ses (seslendirmeli film)
+        if (settings.bubbleStyle === "subtitle") {   // alt yazı: "ALİ: metin" altta, balon yok
+          var SL = textLayer("Alt yazı · " + c.def.name + ": " + text.slice(0, 22), c.def.name.toLocaleUpperCase("tr") + (inner ? " (içinden)" : "") + ": " + text, { start: a, end: b, anchor: { x: 0.5, y: 1 },
+            base: { x: W / 2, y: H * 0.965, rot: 0, sx: 1, sy: 1, opacity: 1 },
+            text: { size: Math.round(bubbleFont * 0.95), font: fonts[0].id, color: "#ffffff", bubble: true, bubbleColor: "rgba(10,14,24,0.72)", bubbleTail: "none", maxWidth: Math.round(W * 0.8), weight: "400" } });
+          fx(SL, "fadeIn", a, a + 0.2); fx(SL, "fadeOut", Math.max(a + 0.2, b - 0.25), b); SL.hud = true; sc.layers.push(SL);
+          return SL;
+        }
         var bubbleColor = settings.bubbleStyle === "color" ? hsl(hash(kn) % 360, 70, 90) : "#ffffff";
         var shout = !inner && (emotion === "kizgin" || (/!\s*$/.test(text) && /[A-ZÇĞİÖŞÜ]{3,}/.test(text) && text === text.toLocaleUpperCase("tr")));   // kızgın ya da BÜYÜK HARFLE ÜNLEM → bağırma balonu
         var size = emotion === "fisilti" ? Math.round(bubbleFont * 0.85) : shout ? Math.round(bubbleFont * 1.12) : bubbleFont;
@@ -1272,7 +1283,12 @@
               if (kn === subs[0]) { cue("boing", start + 0.05); sfxText("HOP!", curX(kn, start) + (c.facing >= 0 ? -1 : 1) * c.charH * 0.5, c.ground - c.charH * 1.1, start + 0.1, 48, 0.9); } break;
             }
             case "spin": ensurePresent(kn, start); fx(c.layer, "spin", start, start + dur, { speed: 1 / dur, dir: "cw" }); break;
-            case "turn": ensurePresent(kn, start); setFacing(kn, -c.facing || -1, start + 0.1); break;
+            case "turn": {   // yöne, hedefe ya da arkasına döner
+              ensurePresent(kn, start);
+              var tt = a.target ? norm(a.target) : null;
+              var tdir = (tt && chars[tt] && chars[tt].present) ? (curX(tt, start) > curX(kn, start) ? 1 : -1) : a.to === "left" ? -1 : a.to === "right" ? 1 : -(c.facing || 1);
+              setFacing(kn, tdir, start + 0.1); break;
+            }
             case "fall": {
               L = ensurePresent(kn, start); dropHeld(kn, start);
               key(L, "rot", start, M.trackValue(L.tracks.rot, start, 0)); key(L, "rot", start + dur, c.facing >= 0 ? 82 : -82, "easeOutBounce");
@@ -1657,7 +1673,7 @@
     "Ali soldan girer.              → eylem; girer, çıkar, yürür, koşar, zıplar, döner, düşer, kalkar, uçar, iner,",
     "                                 el sallar, güler, ağlar, kızar, şaşırır, korkar, dans eder, oturur, uyur, düşünür,",
     "                                 bakar, büyür, küçülür, saklanır, bekler. Yön: sağdan/soldan, sağa/sola.",
-    "Ali Ayşe'ye doğru yürür.       → hedefe yürür.   Ali ve Ayşe sola çıkar. → birlikte.   Herkes zıplar.",
+    "Ali Ayşe'ye doğru yürür.       → hedefe yürür.   Ali ve Ayşe sola çıkar. → birlikte.   Herkes zıplar.   Ali sola döner. / Ali Ayşe'ye döner. → yön değiştirir",
     "2 saniye bekler.               → süre.   BAŞLIK: Film adı   YAZAN: Adınız   → açılış kartı",
     "Kamera Ayşe'ye yaklaşır.       → yakın çekim.   Kamera uzaklaşır. → genel plan.   Kamera sağa kayar. → kaydırma",
     "Karabaş havlar.                → hayvan sesi balonu (havlar, miyavlar, cıvıldar). Herkes ... → sahnedeki tüm karakterler",

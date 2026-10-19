@@ -60,12 +60,14 @@ Ali ve Ayşe sağa çıkar.
 - **Replik:** `ALİ: metin` — balon karakterin başının üstünde çıkar, konuşurken karakter kıpırdar (konuşma karesi yüklediysen ağzı oynar).
   Parantez içi duygu: `(mutlu)`, `(üzgün)`, `(kızgın)`, `(şaşkın)`, `(korkmuş)`, `(fısıldayarak)`, `(düşünceli)`, `(yorgun)`.
   **Balon şekilleri:** `AYŞE (içinden): Keşke...` → bulut kenarlı düşünce balonu (ağız kıpırdamaz); kızgın replik ya da `BÜYÜK HARFLE ÜNLEM!` → sivri dişli bağırma balonu.
-- **Eylem:** düz cümle — girer, çıkar, yürür, koşar, zıplar, döner, düşer, kalkar, uçar, iner, el sallar, güler, ağlar, kızar, şaşırır,
+- **Eylem:** düz cümle — girer, çıkar, yürür, koşar, zıplar, döner (kendi etrafında; `sola döner`, `Ayşe'ye döner`, `arkasını döner` yön değiştirir), düşer, kalkar, uçar, iner, el sallar, güler, ağlar, kızar, şaşırır,
   korkar, dans eder, oturur, uyur, uyanır, düşünür, bakar/görür, sarılır, alkışlar, şarkı söyler, geri çekilir, kayar, yüzer, esner,
   atar, yakalar, yatar, büyür, küçülür, saklanır, bekler; `Kapı çalar.` ve `Telefon çalar.` → ses, **TAK TAK!** / **ZIRR ZIRR!** yazısı, sahnedekiler irkilip kapıya bakar. Yön: `sağdan/soldan`, `sağa/sola`;
   hedef: `Ali Ayşe'ye doğru yürür`, `Ali Ayşe'ye sarılır`; birlikte: `Ali ve Ayşe`, `Herkes`; süre: `2 saniye bekler`; hız: `koşarak`, `yavaşça`.
   Ünlemle biten replikte karakter hafifçe zıplar, soru işaretinde başını yana eğer; dinleyen karakter konuşana döner ve başını sallar.
 - **Arka plan:** her sahnede kilitli bir “Arka plan” katmanı olarak gelir ve yavaşça yaklaşır/uzaklaşır (kamera hissi); bulutlar akar.
+  Kendi arka plan resmini yüklediysen küçük resmin yanındaki **Zemin** kaydırıcısıyla karakterlerin ayak bastığı çizgiyi resme göre ayarla (kırmızı çizgi); karakterler havada durmaz, yere basar.
+- **Replik gösterimi:** beyaz balon, karaktere göre renkli balon, **alt yazı** (balon yok; “ALİ: metin” altta) ya da **yok** (yalnız ses; seslendirmeli filmler için).
 - **Anlatıcı:** `ANLATICI: metin` → alt yazı.
 - **Kamera:** `Kamera Ayşe'ye yaklaşır.` (yakın çekim), `Kamera uzaklaşır.` (genel plan), `Kamera sağa kayar.` (kaydırma), `Yakın çekim: Ali`.
   Kamera hareketi sıradaki replikle örtüşür; stüdyoda sahne özelliklerindeki **Kamera** bölümünden ve zaman çizelgesindeki kamera satırından elle de kurulur.
@@ -94,7 +96,8 @@ Ali ve Ayşe sağa çıkar.
   kızgın, şaşkın, korkmuş, üzgün ve fısıltılı repliklerde kamera konuşana yakın çekim yapar; soru ve ünlemden sonra kısa bir tepki beklemesi vardır;
   seslendirme sırasında müzik kısılır (önizlemede ve videoda); başlık kartında parıltılar süzülür; konuşma balonu duyguya uyar (öfkede titrer ve pembeleşir,
   korkuda titreşir, sevinçte zıplar, şaşkınlıkta esner, fısıltıda solar);
-  yürürken hareket yönüne eğilir, dönüşte esner, varışta yerine oturur; zıplayınca ve düşünce yerde toz bulutu çıkar; boş anlarda ufak kıpırdanır;
+  yürürken hareket yönüne eğilir, dönüşte incelip aynalanır (ani çevirme yok), varışta yerine oturur; koşmadan önce geriye yaslanıp fırlar, durunca toz kalkar;
+  üretilen adım karelerinde gövde her adımda hafifçe salınır; zıplayınca ve düşünce yerde toz bulutu çıkar; boş anlarda ufak kıpırdanır;
   dinleyenler ünlemde irkilir, öfkeli replikte geri çekilir, üzgün replikte yaklaşır. Kamera ipucu olmayan konuşmalı sahnelerde kamera fark edilmeden yaklaşır.
   Çizilen arka planlarda ortam canlıdır: gündüz kuşlar geçer, kırda ve ormanda kelebekler uçar, gece ateşböcekleri ve parıldayan yıldızlar, akşam ve ormanda düşen yapraklar, uzayda kuyruklu yıldız.
 - **Karakter görselleri:** her karaktere bir duruş görseli yeter; saydam PNG'lerin boş kenarları kendiliğinden kırpılır. İstersen ağzı açık kare (konuşma), adım kareleri (yürüme),

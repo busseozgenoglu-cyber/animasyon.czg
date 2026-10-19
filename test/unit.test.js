@@ -232,6 +232,8 @@ console.log("Senaryo ayrıştırıcı (Director)");
   ok(hug.act === "hug" && hug.subjects.join() === "Ali" && hug.target === "Ayşe", "sarılma: özne ve hedef");
   ok(["Ali yere yatar.", "Ayşe alkışlar.", "Ali şarkı söyler.", "Ayşe geri çekilir.", "Ali uyanır.", "Ali topu atar.", "Ayşe topu yakalar.", "Ali kayar.", "Ayşe esner."].map((t) => D.analyzeAction(t, names, []).act).join() === "lie,clap,sing,back,wake,throw,catch,slide,yawn", "yeni eylemler tanınıyor");
   ok(D.analyzeAction("Ali adım atar.", names, []).act === "walk", "“adım atar” yürüme sayılır (atar ile karışmaz)");
+  const tl = D.analyzeAction("Ali sola döner.", ["Ali"], []), tt = D.analyzeAction("Ali Ayşe'ye döner.", ["Ali", "Ayşe"], []);
+  ok(tl.act === "turn" && tl.to === "left" && tt.act === "turn" && tt.target === "Ayşe" && tt.subjects.join() === "Ali" && D.analyzeAction("Ali arkasını döner.", ["Ali"], []).act === "turn" && D.analyzeAction("Ali döner.", ["Ali"], []).act === "spin" && D.analyzeAction("Ali fırıl fırıl döner.", ["Ali"], []).act === "spin", "“sola döner” / “Ayşe'ye döner” yön değiştirme; tek başına “döner” kendi etrafında dönme");
   const cand = D.analyze("SAHNE 1 - PARK\nALİ: Selam\nKöpek havlar.\nSonra zıplar.", ["Ali"]).stats;
   ok(cand.candidates.join() === "Köpek" && cand.unknownActions.length === 0, "öznesi bilinmeyen eylemden karakter adayı: Köpek (havlama tanındı)");
   ok(D.analyze("SAHNE 1\nALİ: \nALİ: Merhaba", []).stats.lines === 1, "boş replik satırı sayılmaz");

@@ -233,12 +233,12 @@
     });
     if (Array.isArray(raw.backgrounds)) raw.backgrounds.forEach(function (b) {
       if (!b || typeof b.assetId !== "string" || !assets[b.assetId]) return;
-      sc.backgrounds.push({ id: typeof b.id === "string" ? b.id : M.uid("bg"), assetId: b.assetId, name: str(b.name, "arka plan", 60) });
+      sc.backgrounds.push({ id: typeof b.id === "string" ? b.id : M.uid("bg"), assetId: b.assetId, name: str(b.name, "arka plan", 60), ground: num(b.ground, 0.9, 0.5, 1) });   // ground: zemin çizgisi (yükseklik oranı)
     });
     var st = raw.settings || {};
     sc.settings = {
       charHeight: num(st.charHeight, 0.42, 0.15, 0.8), speed: oneOf(st.speed, ["slow", "normal", "fast"], "normal"),
-      bubbleStyle: oneOf(st.bubbleStyle, ["white", "color"], "white"), titleCard: bool(st.titleCard, true), endCard: bool(st.endCard, true),
+      bubbleStyle: oneOf(st.bubbleStyle, ["white", "color", "subtitle", "none"], "white"), titleCard: bool(st.titleCard, true), endCard: bool(st.endCard, true),
       headings: bool(st.headings, true), fade: bool(st.fade, true), sfx: bool(st.sfx, true), onomatopoeia: bool(st.onomatopoeia, true)
     };
     var vo = raw.voice || {};

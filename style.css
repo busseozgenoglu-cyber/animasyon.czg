@@ -227,7 +227,12 @@ textarea { resize: vertical; min-height: 60px; }
 .sc-bgs { display: flex; flex-direction: column; gap: 6px; max-height: 18vh; overflow: auto; }
 .sc-bg { display: flex; align-items: center; gap: 6px; }
 .sc-bg img { width: 56px; height: 34px; object-fit: cover; border-radius: 6px; flex: none; }
-.sc-bg input { flex: 1; min-width: 0; }
+.sc-bg input[type="text"] { flex: 1; min-width: 0; }
+.sc-thumb { position: relative; flex: none; width: 56px; height: 34px; }
+.sc-thumb img { display: block; }
+.sc-groundline { position: absolute; left: 0; right: 0; height: 2px; background: #ff3366; box-shadow: 0 0 0 1px rgba(255,255,255,.7); pointer-events: none; }
+.sc-ground { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.sc-ground input[type="range"] { width: 64px; margin: 0; }
 #scText { min-height: 44vh; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; }
 .sc-help pre { white-space: pre-wrap; font-size: 11.5px; color: var(--muted); background: var(--panel-2); border-radius: 8px; padding: 10px; margin: 6px 0 0; line-height: 1.45; }
 .sc-help summary { cursor: pointer; font-size: 12.5px; color: var(--accent); }

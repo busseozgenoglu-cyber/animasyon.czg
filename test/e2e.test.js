@@ -300,6 +300,36 @@ async function png(page, name, w, h, drawSrc) {
     check(walk.gen === 2 && walk.genSize === "200x320,200x320" && walk.sets === 3 && walk.fps.split(",").every((f) => +f >= 4 && +f <= 9), "tek görselli karakter: 2 adım karesi üretildi (boyut korunur), giriş/yürüme/çıkışta 4 karelik döngü (" + JSON.stringify({ gen: walk.gen, genSize: walk.genSize, zSize: walk.zSize, sets: walk.sets, fps: walk.fps }) + ")");
     check(walk.inEase === "linear" && walk.outEase === "linear" && walk.xEase.indexOf("ease") < 0 && walk.inDur >= 0.8 && walk.inDur <= 2 && walk.wobSpeed.split(",").every((v) => +v >= 0.6 && +v <= 2.3), "giriş ve çıkış sabit hızla yürüyerek (süzülmez); hoplama adım sıklığında, yalpa iki adımda bir (" + walk.wobSpeed + ")");
     check(walk.minGap >= 0.2 && walk.maxGap <= 0.85 && walk.runBob > 0 && walk.warn === 0, "adım sesleri adım aralığında (" + walk.minGap + "–" + walk.maxGap + " sn); koşuda daha yüksek hoplama");
+    // Zemin çizgisi, replik gösterim kipleri, incelip dönüş, koşu hazırlığı
+    const r6 = await page.evaluate(async () => {
+      const keep = App.ensureScript().text, sc = App.ensureScript();
+      const c = document.createElement("canvas"); c.width = 640; c.height = 360; const x = c.getContext("2d");
+      x.fillStyle = "#9fd3ff"; x.fillRect(0, 0, 640, 360); x.fillStyle = "#6cc04a"; x.fillRect(0, 216, 640, 144);
+      const a = { id: "as_e2e_bg", name: "park.png", dataUrl: c.toDataURL("image/png"), width: 640, height: 360 };
+      App.S.project.assets[a.id] = a; await Render.ensureAssets(App.S.project);
+      sc.backgrounds.push({ id: "bg_e2e", assetId: a.id, name: "PARK", ground: 0.7 });
+      sc.text = "SAHNE 1 - PARK - GÜNDÜZ\nALİ: Merhaba!\nAYŞE (içinden): Kim bu?\nAli sağa koşar.\nAli sola döner.";
+      const out = {};
+      await App.buildFromScript({ autoplay: false });
+      let s = App.S.project.scenes.find((q) => /PARK/.test(q.name)), ali = s.layers.find((l) => l.name === "Ali");
+      out.ground = { y: ali.base.y, shadow: ali.shadow && ali.shadow.y, bg: s.layers[0].frames[0] === a.id, expect: Math.round(App.S.project.height * 0.7) };
+      out.flipKeys = ali.tracks.sx.map((k2) => k2.e); out.flipThroughZero = ali.tracks.sx.length >= 2 && ali.tracks.sx.some((k2, i) => i > 0 && Math.sign(k2.v) !== Math.sign(ali.tracks.sx[i - 1].v));
+      out.antic = ali.effects.some((e) => e.type === "lean" && Math.abs(e.params.angle) === 9 && e.end - e.start <= 0.3);
+      out.puffs = s.layers.filter((l) => l.name === "Toz").length;
+      sc.settings.bubbleStyle = "subtitle"; await App.buildFromScript({ autoplay: false });
+      s = App.S.project.scenes.find((q) => /PARK/.test(q.name));
+      const subs = s.layers.filter((l) => /^Alt yazı · /.test(l.name));
+      out.subtitle = { replik: s.layers.filter((l) => /^Replik/.test(l.name)).length, subs: subs.length, hud: subs.every((l) => l.hud), text: subs.map((l) => l.text.content).join(" | ") };
+      sc.settings.bubbleStyle = "none"; await App.buildFromScript({ autoplay: false });
+      s = App.S.project.scenes.find((q) => /PARK/.test(q.name));
+      out.none = s.layers.filter((l) => /^Replik|^Alt yazı/.test(l.name)).length;
+      sc.settings.bubbleStyle = "white"; sc.backgrounds = sc.backgrounds.filter((b) => b.id !== "bg_e2e"); delete App.S.project.assets[a.id]; sc.text = keep;
+      await App.buildFromScript({ autoplay: false });
+      return out;
+    });
+    check(r6.ground.bg && r6.ground.y === r6.ground.expect && r6.ground.shadow === r6.ground.expect, "kullanıcı arka planında zemin çizgisi: karakter ve gölgesi %70 yüksekliğe basıyor (" + JSON.stringify(r6.ground) + ")");
+    check(r6.flipKeys.length >= 2 && r6.flipKeys.every((e) => e === "easeInOutQuad") && r6.flipThroughZero && r6.antic && r6.puffs >= 2, "dönüş incelerek (sıfırdan geçerek), koşu öncesi geriye yaslanma, kalkış ve duruş tozu (" + r6.puffs + ")");
+    check(r6.subtitle.replik === 0 && r6.subtitle.subs === 2 && r6.subtitle.hud && /^ALİ: Merhaba!/.test(r6.subtitle.text) && /AYŞE \(içinden\): Kim bu\?/.test(r6.subtitle.text) && r6.none === 0, "alt yazı kipi: balon yok, “ALİ: …” alt yazıları ekran katmanı; “yok” kipinde replik metni yok (" + r6.subtitle.text + ")");
     check(fx.extra.fog === 2 && fx.extra.fogFront && fx.extra.fogBelowBubbles && fx.extra.angry, "sisli sahnede 2 sis tülü karakterlerin önünde, balonların altında; kızgın replik balonu titriyor ve pembeleşiyor");
     check(!!fx.extra.okul && fx.extra.okul.bg === 4 && fx.extra.okul.amb === "rain@0.35" && fx.extra.okul.whisper === "#f4f4f4" && fx.extra.okul.warn === 0, "sınıf iç mekânı: 4 katman, camdan kısık yağmur sesi, “fısıltı” balonu tanındı (" + JSON.stringify(fx.extra.okul) + ")");
     check(film.title === "Kayıp Top", "film adı senaryodaki BAŞLIK'tan alındı: " + film.title);
