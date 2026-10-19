@@ -344,8 +344,11 @@
       h("span", { class: "unit" }, "Arka plan"), typeRow,
       bg.type === "transparent" ? h("p", { class: "hint" }, "Saydam arka plan PNG dizisinde ve GIF'te korunur; videolarda siyah görünür.") : colorRow,
       imgRow,
-      selectField("Sahne sonunda", [{ value: "none", label: "Doğrudan kes" }, { value: "fade", label: "Siyaha geçiş" }], trn.type, function (v) { trn.type = v; App.commit(); App.markDirty(); UI.renderProps(); }),
-      trn.type === "fade" ? numField("Geçiş süresi", { value: trn.duration, unit: "sn", attrs: { min: "0.1", max: "5", step: "0.1" }, onChange: function (v) { trn.duration = Math.max(0.1, Math.min(5, v)); App.commit(); App.markDirty(); } }) : null
+      selectField("Sahne sonunda", [{ value: "none", label: "Doğrudan kes" }, { value: "fade", label: "Siyaha geçiş" }, { value: "iris", label: "İris (daire kapanır)" }, { value: "wipe", label: "Silme (soldan sağa)" }], trn.type, function (v) { trn.type = v; App.commit(); App.markDirty(); UI.renderProps(); }),
+      selectField("Renk tonu", [{ value: "", label: "Yok" }, { value: "sabah", label: "Sabah (sıcak, açık)" }, { value: "aksam", label: "Akşam (turuncu)" }, { value: "gece", label: "Gece (mavi)" }, { value: "sepya", label: "Sepya (eski film)" }],
+        sc.grade ? (sc.grade.color === "#8fa6ff" ? "gece" : sc.grade.color === "#ffc28c" ? "aksam" : sc.grade.color === "#ffe9c8" ? "sabah" : sc.grade.color === "#e0c9a0" ? "sepya" : "") : "",
+        function (v) { var G = { sabah: { color: "#ffe9c8", alpha: 0.25 }, aksam: { color: "#ffc28c", alpha: 0.3 }, gece: { color: "#8fa6ff", alpha: 0.45 }, sepya: { color: "#e0c9a0", alpha: 0.55 } }; sc.grade = G[v] || null; App.commit(); App.markDirty(); }),
+      trn.type !== "none" ? numField("Geçiş süresi", { value: trn.duration, unit: "sn", attrs: { min: "0.1", max: "5", step: "0.1" }, onChange: function (v) { trn.duration = Math.max(0.1, Math.min(5, v)); App.commit(); App.markDirty(); } }) : null
     ]));
     var camHere = App.cameraHasKeyAt(App.S.time), camKeys = App.cameraKeyTimes().length;
     function camLive(prop, scale) { return function (v) { var created = App.setCameraProp(prop, v / scale); App.markDirty(); if (created) UI.renderTimeline(); }; }
@@ -735,7 +738,8 @@
   }
 
   /* ── Senaryodan film üretme penceresi ─────────────────────── */
-  var ROLE_LABELS = [["pose", "Duruş"], ["talk", "Konuşma karesi"], ["walk", "Yürüme karesi"], ["blink", "Göz kırpma"], ["mutlu", "Mutlu"], ["uzgun", "Üzgün"], ["kizgin", "Kızgın"], ["saskin", "Şaşkın"], ["korkmus", "Korkmuş"]];
+  var ROLE_LABELS = [["pose", "Duruş"], ["talk", "Konuşma karesi"], ["walk", "Yürüme karesi"], ["blink", "Göz kırpma"], ["mutlu", "Mutlu"], ["uzgun", "Üzgün"], ["kizgin", "Kızgın"], ["saskin", "Şaşkın"], ["korkmus", "Korkmuş"],
+    ["jest1", "Jest 1"], ["jest1k", "Jest 1 (ağız açık)"], ["jest2", "Jest 2"], ["jest2k", "Jest 2 (ağız açık)"], ["bak", "Yana bakış"]];
   var previewTimer = 0;
 
   UI.openScript = function () {

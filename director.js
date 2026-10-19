@@ -503,7 +503,10 @@
       var byRole = {};
       imgs.forEach(function (im) { (byRole[im.role || "pose"] = byRole[im.role || "pose"] || []).push(im.assetId); });
       var pose = (byRole.pose || [])[0] || imgs[0].assetId;
-      return { name: name, pose: pose, talk: byRole.talk || [], walk: byRole.walk || [], blink: byRole.blink || [], emotions: {
+      var jest = [];
+      if (byRole.jest1 && byRole.jest1k) jest.push([byRole.jest1[0], byRole.jest1k[0]]);
+      if (byRole.jest2 && byRole.jest2k) jest.push([byRole.jest2[0], byRole.jest2k[0]]);
+      return { name: name, pose: pose, talk: byRole.talk || [], walk: byRole.walk || [], blink: byRole.blink || [], jest: jest, look: (byRole.bak || [])[0] || null, emotions: {
         mutlu: (byRole.mutlu || [])[0], uzgun: (byRole.uzgun || [])[0], kizgin: (byRole.kizgin || [])[0], saskin: (byRole.saskin || [])[0], korkmus: (byRole.korkmus || [])[0] },
         facing: facing === "left" ? -1 : 1, size: (size > 0 ? size : 1), voiceId: voiceId || "" };
     }
@@ -533,7 +536,7 @@
         var talk = genAsset("ph:" + norm(nm) + ":talk", nm + " (konuşma).png", function () { return drawPlaceholder(nm, "talk"); });
         var walk = genAsset("ph:" + norm(nm) + ":walk", nm + " (yürüme).png", function () { return drawPlaceholder(nm, "walk"); });
         var own2 = script.cast.filter(function (c) { return norm(c.name) === norm(nm); })[0];
-        made = { name: nm, pose: pose, talk: [talk], walk: [walk], blink: [], emotions: {}, facing: 1, placeholder: true, size: 1, voiceId: (own2 && own2.voiceId) || "" };
+        made = { name: nm, pose: pose, talk: [talk], walk: [walk], blink: [], jest: [], look: null, emotions: {}, facing: 1, placeholder: true, size: 1, voiceId: (own2 && own2.voiceId) || "" };
         warnings.push("“" + nm + "” için görsel yüklenmedi; renkli bir yer tutucu karakter çizildi.");
       }
       cast[norm(nm)] = made;
@@ -559,7 +562,8 @@
     var fonts = Model.FONTS;
     var scenes = [];
 
-    function fade(sc) { if (settings.fade !== false) sc.transition = { type: "fade", duration: 0.5 }; }
+    function fade(sc, type, dur) { if (settings.fade !== false) sc.transition = { type: type || "fade", duration: dur || 0.5 }; }
+    var GRADES = { gece: { color: "#8fa6ff", alpha: 0.45 }, aksam: { color: "#ffc28c", alpha: 0.3 }, sabah: { color: "#ffe9c8", alpha: 0.25 } };
     function fx(layer, type, start, end, params) {
       var e = M.createEffect(type, 9999, layer);
       e.start = Math.max(0, start); e.end = end == null ? null : Math.max(e.start, end);
@@ -604,11 +608,12 @@
       var sc = Model.newScene((sa.place || "Sahne " + sa.index) + (sa.time ? " · " + TIME_LABEL[sa.time] : ""), 4);
       var time = sa.time || "gunduz", kind = placeKind(sa.place), outdoor = kind !== "ic" && kind !== "uzay";
       var userBg = pickBackground(sa);
+      sc.grade = GRADES[time] || null;   // günün saatine göre renk tonu (karakterler sahneye oturur)
       var bgAssetId = userBg ? userBg.assetId : genAsset("bg:" + kind + ":" + time + ":" + W + "x" + H, "arka plan " + kind + " " + time + ".png", function () { return drawBackground(kind, time, W, H); });
       sc.background = { type: "color", color: (SKY[time] || SKY.gunduz)[0], color2: "#000000", angle: 0, assetId: null };
       var bgA = project.assets[bgAssetId], cover = Math.max(W / (bgA ? bgA.width : W), H / (bgA ? bgA.height : H));
       var bgL = Model.newLayer("image", { name: "Arka plan", frames: [bgAssetId], base: { x: W / 2, y: H / 2, rot: 0, sx: cover, sy: cover, opacity: 1 } });
-      bgL.locked = true;
+      bgL.locked = true; bgL.parallax = 0.8;   // kamera hareketinde arka plan daha az kayar (derinlik)
       var pushIn = scenes.length % 2 === 0;   // sahneler sırayla yaklaşır / uzaklaşır: durağan değil, sinema hissi
       bgL.base.sx = bgL.base.sy = pushIn ? cover : cover * 1.05;
       sc.layers.push(bgL);
@@ -618,6 +623,7 @@
             var cid = genAsset("cloud:" + i, "bulut-" + (i + 1) + ".png", function () { return drawCloud(i); });
             var L = Model.newLayer("image", { name: "Bulut " + (i + 1), frames: [cid], base: { x: W * cl[0], y: H * cl[1], rot: 0, sx: cl[2] * k, sy: cl[2] * k, opacity: time === "gece" ? 0.35 : 0.95 } });
             fx(L, "drift", 0, null, { speed: cl[3], dir: "right", wrap: "yes" });
+            L.parallax = 0.88;
             sc.layers.push(L);
           });
         }
@@ -736,7 +742,9 @@
         var c = chars[kn], L = c.layer;
         fx(L, "wobble", a, b, { strength: 4, speed: stepsPerSec, bob: Math.round(8 * k) });
         fx(L, "lean", a, b, { angle: (dirSign || c.facing || 1) * (stepsPerSec > 3 ? 7 : 3), ramp: 0.25 });   // hareket yönüne öne eğilir
-        if (c.def.walk.length) L.frameSets.push({ start: a, end: b, frames: [c.def.pose].concat(c.def.walk), fps: stepsPerSec * 2 });
+        if (c.def.walk.length >= 2) L.frameSets.push({ start: a, end: b, frames: [c.def.walk[0], c.def.pose, c.def.walk[1], c.def.pose].concat(c.def.walk.slice(2)), fps: stepsPerSec * 2 });   // temas–geçiş–temas–geçiş
+        else if (c.def.walk.length) L.frameSets.push({ start: a, end: b, frames: [c.def.pose, c.def.walk[0]], fps: stepsPerSec * 2 });
+        if (!c.flying) { var nStep = 0; for (var ts = a + 0.5 / stepsPerSec; ts < b && nStep < 16; ts += 1 / stepsPerSec, nStep++) cue("step", ts); }
         c.busy.push([a, b]);
       }
       /* Yerde toz bulutu (iniş, düşme, koşuya başlama) */
@@ -758,7 +766,22 @@
           var fps = 12, need = Math.max(2, Math.ceil((b - a) * fps));
           var seq = (mouth && mouth.length) ? mouth : mouthPattern(text || "", b - a, fps, hash(kn + ":" + a.toFixed(2)));
           var closed = emoImg || def.pose, open1 = def.talk[0], open2 = def.talk[1] || def.talk[0], frames = [];
-          for (var i = 0; i < need; i++) { var lv = i < seq.length ? seq.charCodeAt(i) - 48 : 0; frames.push(lv <= 0 ? closed : lv === 1 ? open1 : open2); }
+          // Jestler: duygu karesi yoksa, 1 sn'den uzun repliklerde cümle/öbek başlarında el-kol hareketi (en çok 3)
+          var gest = [];
+          if (!emoImg && def.jest.length && (b - a) >= 1.0 && text) {
+            var clauses = [], pos = 0, total = text.length;
+            String(text).split(/(?<=[,.;:!?…])\s+/).forEach(function (cl) { var st = text.indexOf(cl, pos); if (st < 0) st = pos; clauses.push({ f: st / total, len: cl.length / total }); pos = st + cl.length; });
+            clauses.slice(0, 3).forEach(function (cl, ci) {
+              var g = def.jest[(hash(kn + ":" + a.toFixed(1) + ":" + ci) + ci) % def.jest.length];
+              var gs = a + cl.f * (b - a) + 0.05, ge = Math.min(b - 0.1, gs + Math.min(1.1, Math.max(0.5, cl.len * (b - a) * 0.8)));
+              if (ge > gs + 0.3) gest.push({ s: gs, e: ge, g: g });
+            });
+          }
+          for (var i = 0; i < need; i++) {
+            var lv = i < seq.length ? seq.charCodeAt(i) - 48 : 0, tt = a + (i + 0.5) / fps, gw = null;
+            for (var gi2 = 0; gi2 < gest.length; gi2++) if (tt >= gest[gi2].s && tt < gest[gi2].e) { gw = gest[gi2].g; break; }
+            frames.push(gw ? (lv <= 0 ? gw[0] : gw[1]) : (lv <= 0 ? closed : lv === 1 ? open1 : open2));
+          }
           L.frameSets.push({ start: a, end: b, frames: frames, fps: fps });
           if (!emoImg) fx(L, "talk", a, b, { strength: Math.round(1.5 * k), speed: 5 });   // hafif baş kıpırtısı
         } else {
@@ -817,7 +840,7 @@
 
       /* Baştan sahnede olanlar */
       order.forEach(function (kn) { if (!firstInfo[kn].enters) ensurePresent(kn, 0); });
-      var t = 0.7, lastSpeaker = null, usedCam = false, dialogueCount = 0;
+      var t = 0.7, lastSpeaker = null, usedCam = false, dialogueCount = 0, beats = [], looks = [];
       if (settings.headings !== false && sa.place) {
         var hd = textLayer("Sahne başlığı", (sa.place + (sa.time ? " · " + TIME_LABEL[sa.time] : "")).toLocaleUpperCase("tr"), { start: 0, end: 2.8, anchor: { x: 0, y: 0 },
           base: { x: Math.round(W * 0.03), y: Math.round(H * 0.045), rot: 0, sx: 1, sy: 1, opacity: 1 },
@@ -864,8 +887,10 @@
               else if (/\?\s*$/.test(ch)) fx(chars[kn].layer, "lean", t, t + d, { angle: 3, ramp: 0.4 });
             }
             // Dinleyiciler: ünlemde irkilme, öfkede geri çekilme, üzüntüde yaklaşma
+            beats.push({ t: t, x: curX(kn, t) / W });
             listeners.forEach(function (o) {
               var right = curX(o, t) > curX(kn, t);
+              if (chars[o].def.look && !chars[o].def.placeholder) looks.push({ kn: o, a: t, b: t + d });
               if (bang) fx(chars[o].layer, "jelly", t + 0.25, t + 0.6, { strength: 7, speed: 3 });
               if (emotion === "kizgin") fx(chars[o].layer, "lean", t, t + d, { angle: right ? 3 : -3, ramp: 0.4 });
               else if (emotion === "uzgun") fx(chars[o].layer, "lean", t, t + d, { angle: right ? -2 : 2, ramp: 0.6 });
@@ -951,6 +976,7 @@
             }
             case "jump": {
               ensurePresent(kn, start); fx(c.layer, "bounce", start, start + dur, { strength: Math.round(base * 0.09), speed: 1.25, squash: 35 });
+              if (start > 0.25) { var sy0 = M.trackValue(c.layer.tracks.sy, start, c.layer.base.sy); key(c.layer, "sy", start - 0.22, sy0, "easeInQuad"); key(c.layer, "sy", start - 0.05, sy0 * 0.86, "easeOutQuad"); key(c.layer, "sy", start + 0.08, sy0, "easeOutQuad"); }   // hazırlık: çömelme
               for (var lt = start + 0.8; lt <= start + dur + 0.01; lt += 0.8) puff(curX(kn, lt), c.ground, lt - 0.05, 0.9);   // her inişte toz
               if (kn === subs[0]) cue("boing", start + 0.05); break;
             }
@@ -1027,9 +1053,26 @@
       sc.duration = Math.round((t + 0.9) * project.fps) / project.fps;
       /* Kamera ipucu yoksa: konuşmalı sahnede yavaş, fark edilmeyen bir yaklaşma (sinema hissi) */
       if (!usedCam && dialogueCount >= 2) {
-        camKey("zoom", 0, 1); camKey("x", 0, 0.5); camKey("y", 0, 0.5);
-        camKey("zoom", sc.duration, W < H ? 1.03 : 1.05); camKey("y", sc.duration, 0.515);
+        var z0a = W < H ? 1.02 : 1.03, z1a = W < H ? 1.04 : 1.06;
+        camKey("zoom", 0, z0a); camKey("y", 0, 0.5); camKey("zoom", sc.duration, z1a); camKey("y", sc.duration, 0.515);
+        camKey("x", 0, 0.5);
+        beats.forEach(function (bt, bi) {   // konuşana doğru fark edilmeyen kayma
+          var zt = z0a + (z1a - z0a) * (bt.t / sc.duration), lim = (0.5 - 0.5 / zt) * 0.85, target = Math.max(0.5 - lim, Math.min(0.5 + lim, 0.5 + (bt.x - 0.5) * 0.12));
+          var prevT = bi ? beats[bi - 1].t : 0;
+          camKey("x", Math.max(prevT + 0.05, bt.t - 0.6), M.trackValue(sc.camera.tracks.x, Math.max(prevT + 0.05, bt.t - 0.6), sc.camera.base.x));
+          camKey("x", bt.t + 0.6, target);
+        });
       }
+      /* Dinleyenler konuşana bakar (yana bakış karesi), yürüme ve eylem pencereleri dışında */
+      looks.forEach(function (lk) {
+        var c = chars[lk.kn];
+        c.layers.forEach(function (L) {
+          var a0 = L.inPoint || 0, a1 = L.outPoint == null ? sc.duration : L.outPoint;
+          if (lk.b <= a0 || lk.a >= a1) return;
+          var busy = c.busy.some(function (w) { return lk.a < w[1] && lk.b > w[0]; });
+          if (!busy) L.frameSets.push({ start: Math.max(a0, lk.a), end: Math.min(a1, lk.b), frames: [c.def.look], fps: 1 });
+        });
+      });
       /* Ortam: kuşlar, kelebekler, ateşböcekleri, yapraklar, kuyruklu yıldız (yalnızca çizilen arka planlarda) */
       if (!userBg) {
         var amb = [], sseed = hash("amb:" + sa.index + ":" + sa.place);
@@ -1044,6 +1087,7 @@
             BL.inPoint = tb0; BL.outPoint = tb0 + T;
             key(BL, "x", tb0, ltr ? -W * 0.08 : W * 1.08, "linear"); key(BL, "x", tb0 + T, ltr ? W * 1.08 : -W * 0.08, "linear");
             fx(BL, "float", tb0, tb0 + T, { strength: Math.round(10 * k), speed: 0.8, tilt: 2 });
+            BL.parallax = 0.9;
             addAmb(BL);
           }
         }
@@ -1075,6 +1119,7 @@
             var ss = (0.18 + rnd01("ss" + si) * 0.14) * k;
             var SL = Model.newLayer("image", { name: "Parıltı", frames: [sid], base: { x: W * (0.05 + rnd01("sx" + si) * 0.9), y: H * (0.05 + rnd01("sy" + si) * 0.3), rot: 0, sx: ss, sy: ss, opacity: 0.9 } });
             fx(SL, "pulse", 0, null, { strength: 90, speed: 0.35 + rnd01("sp" + si) * 0.6 });
+            SL.parallax = 0.75;
             addAmb(SL);
           }
         }
@@ -1150,7 +1195,8 @@
       }
       M.setKey(bgL.tracks.sx, 0, bgL.base.sx, "linear"); M.setKey(bgL.tracks.sy, 0, bgL.base.sy, "linear");
       M.setKey(bgL.tracks.sx, sc.duration, pushIn ? cover * 1.05 : cover, "linear"); M.setKey(bgL.tracks.sy, sc.duration, pushIn ? cover * 1.05 : cover, "linear");
-      fade(sc);
+      var isLast = sa.index === ast.scenes.length;
+      if (isLast) fade(sc, "iris", 0.8); else fade(sc, scenes.length % 2 ? "wipe" : "fade", 0.5);
       scenes.push(sc);
     });
 

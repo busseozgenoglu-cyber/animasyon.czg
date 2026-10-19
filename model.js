@@ -39,7 +39,7 @@
       id: M.uid("sc"), name: name || "Sahne", duration: duration || 4,
       background: newBackground(),
       transition: { type: "none", duration: 0.5 },
-      camera: newCamera(), sfx: [],
+      camera: newCamera(), sfx: [], grade: null,
       layers: []
     };
   }
@@ -84,7 +84,7 @@
       anchor: Object.assign({ x: 0.5, y: 0.5 }, opts.anchor || {}),
       flipX: false, flipY: false,
       inPoint: opts.inPoint || 0, outPoint: opts.outPoint == null ? null : opts.outPoint,
-      effects: [], frameSets: [], shadow: null, hud: false
+      effects: [], frameSets: [], shadow: null, hud: false, parallax: 1
     };
     return L;
   }
@@ -134,6 +134,7 @@
     L.outPoint = raw.outPoint == null ? null : num(raw.outPoint, null, 0);
     L.shadow = (raw.shadow && typeof raw.shadow === "object") ? { y: num(raw.shadow.y, 0) } : null;
     L.hud = bool(raw.hud, false);   // ekran katmanı: kameradan etkilenmez (alt yazı, başlık)
+    L.parallax = num(raw.parallax, 1, 0, 2);   // kameraya tepki oranı (1 = tam, <1 uzak arka plan)
     L.frameSets = [];
     if (Array.isArray(raw.frameSets)) raw.frameSets.forEach(function (fs) {
       if (!fs || !Array.isArray(fs.frames)) return;
@@ -197,7 +198,8 @@
       };
       if (sc.background.type === "image" && !sc.background.assetId) sc.background.type = "color";
       var trn = s.transition || {};
-      sc.transition = { type: oneOf(trn.type, ["none", "fade"], "none"), duration: num(trn.duration, 0.5, 0.1, 5) };
+      sc.transition = { type: oneOf(trn.type, ["none", "fade", "iris", "wipe"], "none"), duration: num(trn.duration, 0.5, 0.1, 5) };
+      sc.grade = (s.grade && typeof s.grade === "object" && /^#[0-9a-fA-F]{6}$/.test(String(s.grade.color))) ? { color: s.grade.color, alpha: num(s.grade.alpha, 0.3, 0, 1) } : null;
       var cam = s.camera || {}, cb = cam.base || {}, ct = cam.tracks || {};
       sc.camera = { base: { zoom: num(cb.zoom, 1, 0.2, 6), x: num(cb.x, 0.5, -1, 2), y: num(cb.y, 0.5, -1, 2) },
         tracks: { zoom: normalizeTrack(ct.zoom), x: normalizeTrack(ct.x), y: normalizeTrack(ct.y) } };
@@ -216,7 +218,7 @@
     return p;
   }
 
-  var CAST_ROLES = ["pose", "talk", "walk", "blink", "mutlu", "uzgun", "kizgin", "saskin", "korkmus"];
+  var CAST_ROLES = ["pose", "talk", "walk", "blink", "mutlu", "uzgun", "kizgin", "saskin", "korkmus", "jest1", "jest1k", "jest2", "jest2k", "bak"];
   function normalizeScript(raw, assets) {
     var sc = newScript();
     if (!raw || typeof raw !== "object") return sc;

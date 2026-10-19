@@ -29,8 +29,9 @@
       var ex = cx + d * eyeDx;
       if (v.eyes === "closed") { x.beginPath(); x.moveTo(ex - 9 * s, eyeY + 2 * s); x.quadraticCurveTo(ex, eyeY + 8 * s, ex + 9 * s, eyeY + 2 * s); x.lineWidth = 3.5 * s; x.strokeStyle = "#2b2140"; x.stroke(); return; }
       ellipse(x, ex, eyeY, er * 0.85, er, "#ffffff", 0, true);
-      circle(x, ex + d * 1.5 * s, eyeY + 2 * s, pr, opt.eyeColor || "#2b2140", true);
-      circle(x, ex + d * 1.5 * s - 2 * s, eyeY - 1 * s, pr * 0.35, "#ffffff", true);
+      var lk = (v.look || 0) * 5 * s;   // yana bakış: gözbebeği kayar
+      circle(x, ex + d * 1.5 * s + lk, eyeY + 2 * s, pr, opt.eyeColor || "#2b2140", true);
+      circle(x, ex + d * 1.5 * s + lk - 2 * s, eyeY - 1 * s, pr * 0.35, "#ffffff", true);
     });
     // kaşlar
     x.lineWidth = 3.5 * s; x.strokeStyle = opt.browColor || "#3b2a1f"; x.lineCap = "round";
@@ -83,7 +84,16 @@
     var sh = torsoTop + 16, armC = p.outfit_style === "dress" || p.sleeveless ? skin : outfit;
     if (arms === "up") { limb(x, cx - torsoW / 2 + 6, sh, cx - torsoW / 2 - 26, sh - 58, 20, armC); limb(x, cx + torsoW / 2 - 6, sh, cx + torsoW / 2 + 26, sh - 58, 20, armC); circle(x, cx - torsoW / 2 - 28, sh - 66, 12, skin); circle(x, cx + torsoW / 2 + 28, sh - 66, 12, skin); }
     else if (arms === "wave") { limb(x, cx - torsoW / 2 + 6, sh, cx - torsoW / 2 - 20, sh + 60, 20, armC); limb(x, cx + torsoW / 2 - 6, sh, cx + torsoW / 2 + 28, sh - 50, 20, armC); circle(x, cx - torsoW / 2 - 22, sh + 70, 12, skin); circle(x, cx + torsoW / 2 + 30, sh - 60, 12, skin); }
-    else { var swing = legs === "walk1" ? 14 : legs === "walk2" ? -14 : 0; limb(x, cx - torsoW / 2 + 6, sh, cx - torsoW / 2 - 18 + swing, sh + 64, 20, armC); limb(x, cx + torsoW / 2 - 6, sh, cx + torsoW / 2 + 18 - swing, sh + 64, 20, armC); circle(x, cx - torsoW / 2 - 20 + swing, sh + 74, 12, skin); circle(x, cx + torsoW / 2 + 20 - swing, sh + 74, 12, skin); }
+    else if (arms === "gest1") {   // bir el öne açık (anlatma)
+      limb(x, cx - torsoW / 2 + 6, sh, cx - torsoW / 2 - 18, sh + 64, 20, armC); circle(x, cx - torsoW / 2 - 20, sh + 74, 12, skin);
+      limb(x, cx + torsoW / 2 - 6, sh, cx + torsoW / 2 + 16, sh + 40, 20, armC); limb(x, cx + torsoW / 2 + 16, sh + 40, cx + torsoW / 2 + 48, sh + 26, 20, armC); circle(x, cx + torsoW / 2 + 52, sh + 24, 12, skin);
+    } else if (arms === "gest2") {   // iki el göğüs hizasında açık (vurgu)
+      [-1, 1].forEach(function (d) { limb(x, cx + d * (torsoW / 2 - 6), sh, cx + d * (torsoW / 2 + 18), sh + 42, 20, armC); limb(x, cx + d * (torsoW / 2 + 18), sh + 42, cx + d * (torsoW / 2 + 34), sh + 6, 20, armC); circle(x, cx + d * (torsoW / 2 + 36), sh + 2, 12, skin); });
+    } else if (arms === "hips") {   // eller belde (öfke)
+      [-1, 1].forEach(function (d) { limb(x, cx + d * (torsoW / 2 - 6), sh, cx + d * (torsoW / 2 + 26), sh + 32, 20, armC); limb(x, cx + d * (torsoW / 2 + 26), sh + 32, cx + d * (torsoW / 2 - 4), sh + 64, 20, armC); circle(x, cx + d * (torsoW / 2 - 6), sh + 66, 12, skin); });
+    } else if (arms === "startle") {   // eller yanaklarda (şaşkınlık)
+      [-1, 1].forEach(function (d) { limb(x, cx + d * (torsoW / 2 - 6), sh, cx + d * (torsoW / 2 + 24), sh + 14, 20, armC); limb(x, cx + d * (torsoW / 2 + 24), sh + 14, cx + d * (headR + 4), headY + 14, 20, armC); circle(x, cx + d * (headR + 6), headY + 12, 12, skin); });
+    } else { var swing = legs === "walk1" ? 14 : legs === "walk2" ? -14 : 0; limb(x, cx - torsoW / 2 + 6, sh, cx - torsoW / 2 - 18 + swing, sh + 64, 20, armC); limb(x, cx + torsoW / 2 - 6, sh, cx + torsoW / 2 + 18 - swing, sh + 64, 20, armC); circle(x, cx - torsoW / 2 - 20 + swing, sh + 74, 12, skin); circle(x, cx + torsoW / 2 + 20 - swing, sh + 74, 12, skin); }
     // boyun + baş
     rrect(x, cx - 10, headY + headR - 14, 20, 22, 6, shade(skin, -18), true);
     // uzun saç arkası
@@ -132,7 +142,7 @@
     rrect(x, cx - 60, 150, 120, 126, 18, body);
     rrect(x, cx - 40, 172, 80, 50, 8, dark); x.fillStyle = led; for (var i = 0; i < 3; i++) x.fillRect(cx - 30 + i * 26, 184, 16, 10 + ((i + (v.mouth === "open1" ? 1 : 0)) % 2) * 14);
     circle(x, cx - 30, 246, 8, "#e63946"); circle(x, cx, 246, 8, "#ffd60a"); circle(x, cx + 30, 246, 8, "#43d17a");
-    var swing = v.legs === "walk1" ? 14 : v.legs === "walk2" ? -14 : 0, up = v.arms === "up" ? -70 : v.arms === "wave" ? -60 : 70;
+    var swing = v.legs === "walk1" ? 14 : v.legs === "walk2" ? -14 : 0, up = v.arms === "up" ? -70 : v.arms === "wave" ? -60 : (v.arms === "gest1" || v.arms === "gest2" || v.arms === "startle") ? -22 : v.arms === "hips" ? 24 : 70;
     limb(x, cx - 58, 170, cx - 92 + swing, 170 + (v.arms === "up" ? up : 70), 18, dark); limb(x, cx + 58, 170, cx + 92 - swing, 170 + up, 18, dark);
     circle(x, cx - 94 + swing, 170 + (v.arms === "up" ? up : 70), 12, body); circle(x, cx + 94 - swing, 170 + up, 12, body);
     rrect(x, cx - 54, 50, 108, 96, 20, body);
@@ -212,10 +222,16 @@
     blink: { mouth: "smile", eyes: "closed", brows: "normal", legs: "stand", arms: "down" },
     mutlu: { mouth: "big", eyes: "open", brows: "up", legs: "stand", arms: "up" },
     uzgun: { mouth: "sad", eyes: "open", brows: "sad", legs: "stand", arms: "down" },
-    kizgin: { mouth: "angry", eyes: "open", brows: "angry", legs: "stand", arms: "down" },
-    saskin: { mouth: "o", eyes: "wide", brows: "up", legs: "stand", arms: "down" }
+    kizgin: { mouth: "angry", eyes: "open", brows: "angry", legs: "stand", arms: "hips" },
+    saskin: { mouth: "o", eyes: "wide", brows: "up", legs: "stand", arms: "startle" },
+    jest1: { mouth: "smile", eyes: "open", brows: "normal", legs: "stand", arms: "gest1" },
+    jest1k: { mouth: "open2", eyes: "open", brows: "up", legs: "stand", arms: "gest1" },
+    jest2: { mouth: "smile", eyes: "open", brows: "normal", legs: "stand", arms: "gest2" },
+    jest2k: { mouth: "open1", eyes: "open", brows: "normal", legs: "stand", arms: "gest2" },
+    bak: { mouth: "smile", eyes: "open", brows: "normal", legs: "stand", arms: "down", look: 1 }
   };
-  var ROLE_OF = { pose: "pose", talk1: "talk", talk2: "talk", walk1: "walk", walk2: "walk", blink: "blink", mutlu: "mutlu", uzgun: "uzgun", kizgin: "kizgin", saskin: "saskin" };
+  var ROLE_OF = { pose: "pose", talk1: "talk", talk2: "talk", walk1: "walk", walk2: "walk", blink: "blink", mutlu: "mutlu", uzgun: "uzgun", kizgin: "kizgin", saskin: "saskin",
+    jest1: "jest1", jest1k: "jest1k", jest2: "jest2", jest2k: "jest2k", bak: "bak" };
 
   var LIST = [
     { id: "ali", name: "Ali", kind: "human", desc: "Meraklı çocuk", p: { body: "child", skin: "#ffd6a5", hair: "#5a3825", hairStyle: "short", outfit: "#43aa8b", pants: "#355070" } },

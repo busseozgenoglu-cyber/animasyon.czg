@@ -29,6 +29,7 @@
     thud: function (c, d, at, n) { tone(c, d, at, "sine", 150, 42, 0.26, 0.4, n); burst(c, d, at, 0.07, 0.25, "lowpass", 900, 300, n); },
     chime: function (c, d, at, n) { tone(c, d, at, "sine", 880, 880, 0.9, 0.16, n); tone(c, d, at + 0.12, "sine", 1318, 1318, 0.9, 0.12, n); tone(c, d, at + 0.24, "sine", 1760, 1760, 1.0, 0.08, n); },
     clap: function (c, d, at, n) { for (var i = 0; i < 3; i++) burst(c, d, at + i * 0.13, 0.04, 0.3, "highpass", 1400, 0, n); },
+    step: function (c, d, at, n) { burst(c, d, at, 0.05, 0.16, "lowpass", 700, 250, n); tone(c, d, at, "sine", 110, 70, 0.07, 0.12, n); },
     sparkle: function (c, d, at, n) { for (var i = 0; i < 4; i++) tone(c, d, at + i * 0.07, "sine", 1200 + i * 300, 1600 + i * 300, 0.18, 0.08, n); }
   };
 

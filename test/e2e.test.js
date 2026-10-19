@@ -204,7 +204,7 @@ async function png(page, name, w, h, drawSrc) {
     await page.click("#scAutoCast");
     await page.waitForTimeout(400);
     const autoCast = await page.evaluate(() => App.S.project.script.cast.map((c) => c.name + ":" + c.images.length));
-    check(autoCast.join() === "Ali:10,Ayşe:10,Dede:10,Karabaş:10", "senaryodan karakterler alındı, kütüphaneden görselleri geldi: " + autoCast.join(" "));
+    check(autoCast.join() === "Ali:15,Ayşe:15,Dede:15,Karabaş:15", "senaryodan karakterler alındı, kütüphaneden görselleri geldi (15 kare: duruş, konuşma, yürüme, göz kırpma, jestler, bakış, duygular): " + autoCast.join(" "));
     const sizes = await page.evaluate(() => App.S.project.script.cast.map((c) => c.name + ":" + c.size).join());
     check(sizes === "Ali:0.86,Ayşe:0.86,Dede:0.96,Karabaş:0.62", "karakter boyları türe göre (çocuk, yaşlı, köpek): " + sizes);
     // Yeni karaktere görsel yükle (tarayıcıda çizilen PNG) → kendi çizimi kullanılır
@@ -229,6 +229,12 @@ async function png(page, name, w, h, drawSrc) {
     const anim = await page.evaluate(() => { const s = App.S.project.scenes[1], ali = s.layers.find((l) => l.name === "Ali"); const lip = ali.frameSets.find((f) => f.fps === 12); const names = s.layers.map((l) => l.name); const firstChar = s.layers.findIndex((l) => !!l.shadow); return { lip: lip ? { n: lip.frames.length, need: Math.ceil((lip.end - lip.start) * 12), distinct: new Set(lip.frames).size } : null, amb: names.filter((n2) => /Kuş|Kelebek/.test(n2)).length, ambBefore: names.findIndex((n2) => /Kuş|Kelebek/.test(n2)) < firstChar, puff: names.filter((n2) => n2 === "Toz").length, fidget: ali.effects.filter((e) => /lean|swing|bounce/.test(e.type)).length, walkLean: s.layers.filter((l) => l.shadow).some((l) => l.effects.some((e) => e.type === "lean" && e.params.ramp === 0.25)) }; });
     check(anim.lip && anim.lip.n === anim.lip.need && anim.lip.distinct >= 2, "dudak senkronu: metnin hece ritmiyle 12 kare/sn ağız dizisi (" + (anim.lip ? anim.lip.n + " kare, " + anim.lip.distinct + " farklı ağız" : "yok") + ")");
     check(anim.amb >= 2 && anim.ambBefore && anim.puff >= 2 && anim.walkLean && anim.fidget >= 2, "ortam canlılığı (kuş/kelebek karakterlerin arkasında: " + anim.amb + "), zıplamada toz (" + anim.puff + "), yürürken eğilme ve boşta kıpırdanma");
+    const anim2 = await page.evaluate(() => { const p = App.S.project, s1 = p.scenes[1], s2 = p.scenes[2]; const cast = p.script.cast.find((c) => c.name === "Ali"); const roleOf = {}; cast.images.forEach((im) => { roleOf[im.assetId] = im.role; }); const ali = s1.layers.find((l) => l.name === "Ali"), lip = ali.frameSets.find((f) => f.fps === 12); const roles = new Set(lip.frames.map((f) => roleOf[f])); const bakId = (cast.images.find((im) => im.role === "bak") || {}).assetId; return { jest: roles.has("jest1") || roles.has("jest2") || roles.has("jest1k") || roles.has("jest2k"), look: ali.frameSets.some((f) => f.frames.length === 1 && f.frames[0] === bakId && f.end - f.start > 1), steps: s1.sfx.filter((q) => q.type === "step").length, walk4: ali.frameSets.some((f) => f.frames.length === 4 && f.fps > 3), tr1: s1.transition.type, tr2: s2.transition.type, grade1: s1.grade, grade2: s2.grade && s2.grade.color, bgPar: s1.layers[0].parallax, crouch: ali.tracks.sy.length >= 3 }; });
+    check(anim2.jest && anim2.look && anim2.walk4 && anim2.crouch, "konuşurken jest kareleri, dinlerken yana bakış, 4 karelik yürüyüş döngüsü, zıplama öncesi çömelme");
+    check(anim2.steps >= 6 && /^(fade|wipe)$/.test(anim2.tr1) && anim2.tr2 === "iris" && anim2.grade1 === null && anim2.grade2 === "#ffc28c" && anim2.bgPar === 0.8, "adım sesleri (" + anim2.steps + "), geçişler (" + anim2.tr1 + " → iris), akşam renk tonu, arka plan paralaksı");
+    // Geçiş kareleri: iris ortada daire bırakır, silme soldan kapatır
+    const trPix = await page.evaluate(() => { const p = App.S.project, c = document.createElement("canvas"); c.width = p.width; c.height = p.height; const ctx = c.getContext("2d", { willReadFrequently: true }); const s2 = p.scenes[2], off = Exporter.sceneOffset(p, 2); Exporter.renderFrame(p, off + s2.duration - 0.4, c, ctx); const mid = ctx.getImageData(p.width / 2, p.height / 2, 1, 1).data, corner = ctx.getImageData(10, 10, 1, 1).data; return { midBright: mid[0] + mid[1] + mid[2], cornerBright: corner[0] + corner[1] + corner[2] }; });
+    check(trPix.cornerBright < 30 && trPix.midBright > 60, "iris geçişi: köşe siyah, orta görünür");
     check(film.title === "Kayıp Top", "film adı senaryodaki BAŞLIK'tan alındı: " + film.title);
     check(film.playing, "üretim sonrası film kendiliğinden oynuyor");
     await page.evaluate(() => { App.pause(); App.switchScene(1, true); App.setTime(8); });
@@ -254,7 +260,7 @@ async function png(page, name, w, h, drawSrc) {
     await page.click("#galleryAdd");
     await page.waitForFunction(() => !document.getElementById("galleryDialog").open, null, { timeout: 10000 });
     const robi = await page.evaluate(() => { const c = App.S.project.script.cast.find((x) => x.name === "Robi"); return c ? c.images.map((i) => i.role) : null; });
-    check(robi && robi.length === 10 && ["pose", "talk", "walk", "blink", "mutlu", "saskin"].every((r) => robi.indexOf(r) >= 0), "galeriden Robi ve Pamuk eklendi; Robi: " + (robi ? robi.length + " görsel (duruş, konuşma, yürüme, göz kırpma, duygular)" : "yok"));
+    check(robi && robi.length === 15 && ["pose", "talk", "walk", "blink", "mutlu", "saskin", "jest1", "jest1k", "jest2", "jest2k", "bak"].every((r) => robi.indexOf(r) >= 0), "galeriden Robi ve Pamuk eklendi; Robi: " + (robi ? robi.length + " görsel (duruş, konuşma, yürüme, göz kırpma, jestler, bakış, duygular)" : "yok"));
     await page.screenshot({ path: path.join(OUT, "08-galeri.png") });
     await page.evaluate(() => Easy.goto(2));
     await page.click('#wizard [data-ins="scene"]');
@@ -325,7 +331,7 @@ async function png(page, name, w, h, drawSrc) {
     check(vo.bubbles.length === 2 && Math.abs(vo.bubbles[0] - (vo.durs[0] + 0.5)) < 0.05 && vo.talk.length && Math.abs(vo.talk[0] - vo.durs[0]) < 0.05, "balon ve ağız hareketi konuşma süresine göre kuruldu (" + vo.bubbles[0] + " sn balon, " + vo.talk[0] + " sn konuşma, klip " + vo.durs[0] + " sn)");
     const lipVo = await page.evaluate(() => { const p = App.S.project, s = p.scenes[1], ali = s.layers.find((l) => l.name === "Ali"), lip = ali.frameSets.find((f) => f.fps === 12), key = s.sfx.find((q) => q.type === "clip").clip; return { mouth: p.clips[key].mouth, n: lip ? lip.frames.length : 0, distinct: lip ? new Set(lip.frames).size : 0, cam: s.camera.tracks.zoom.map((k2) => k2.v) }; });
     check(/^[0-2]{20,}$/.test(lipVo.mouth) && /2/.test(lipVo.mouth) && /0/.test(lipVo.mouth) && lipVo.n >= 20 && lipVo.distinct >= 2, "ağız dizisi ses klibinin zarfından çıkarıldı (" + lipVo.mouth.length + " kare)");
-    check(lipVo.cam.length === 2 && lipVo.cam[0] === 1 && Math.abs(lipVo.cam[1] - 1.03) < 0.001, "kamera ipucu olmayan konuşmalı sahnede yavaş otomatik yaklaşma (dikey: 1 → 1,03)");
+    check(lipVo.cam.length === 2 && Math.abs(lipVo.cam[0] - 1.02) < 0.001 && Math.abs(lipVo.cam[1] - 1.04) < 0.001, "kamera ipucu olmayan konuşmalı sahnede yavaş otomatik yaklaşma (dikey: 1,02 → 1,04)");
     const emo = mock.requests.bodies.find((b2) => /Bankın/.test(b2.text));
     check(mock.requests.tts === 3 && emo && emo.emotion === "mutlu" && emo.voice_id === "v-ayse" && emo.style === "sohbet" && mock.requests.bodies.some((b2) => /top bulundu/.test(b2.text) && b2.style === "anlatıcı" && b2.voice_id === "v-anlatici"), "isteklerde doğru ses, duygu ve stil gitti (" + mock.requests.tts + " istek)");
     await page.evaluate(() => App.buildFromScript({ autoplay: false }));

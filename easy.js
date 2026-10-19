@@ -31,7 +31,8 @@
   var Easy = { step: 1, open: false, built: false, warnings: [], stats: null };
   root.Easy = Easy;
   var preview = { playing: false, T: 0, wall: 0, T0: 0, raf: 0, canvas: null, ctx: null };
-  var ROLE_LABELS = [["pose", "Duruş"], ["talk", "Ağzı açık (konuşma)"], ["walk", "Adım (yürüme)"], ["blink", "Göz kırpma"], ["mutlu", "Mutlu"], ["uzgun", "Üzgün"], ["kizgin", "Kızgın"], ["saskin", "Şaşkın"], ["korkmus", "Korkmuş"]];
+  var ROLE_LABELS = [["pose", "Duruş"], ["talk", "Ağzı açık (konuşma)"], ["walk", "Adım (yürüme)"], ["blink", "Göz kırpma"], ["mutlu", "Mutlu"], ["uzgun", "Üzgün"], ["kizgin", "Kızgın"], ["saskin", "Şaşkın"], ["korkmus", "Korkmuş"],
+    ["jest1", "Jest 1"], ["jest1k", "Jest 1 (ağız açık)"], ["jest2", "Jest 2"], ["jest2k", "Jest 2 (ağız açık)"], ["bak", "Yana bakış"]];
 
   function App() { return root.App; }
   function project() { return root.App.S.project; }

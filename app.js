@@ -575,6 +575,11 @@
     if (/konus|agiz|talk|mouth/.test(n)) return "talk";
     if (/yuru|adim|walk|step|kos/.test(n)) return "walk";
     if (/kirp|blink|goz kapali|gozkapali|kapali/.test(n)) return "blink";
+    if (/jest1k|jest1-k|jest1 k/.test(n)) return "jest1k";
+    if (/jest2k|jest2-k|jest2 k/.test(n)) return "jest2k";
+    if (/jest1|jest\b/.test(n)) return "jest1";
+    if (/jest2/.test(n)) return "jest2";
+    if (/yana|bakis|look/.test(n)) return "bak";
     if (/mutlu|happy|gul/.test(n)) return "mutlu";
     if (/uzgun|sad|agla/.test(n)) return "uzgun";
     if (/kizgin|angry|sinir/.test(n)) return "kizgin";
@@ -818,7 +823,7 @@
   var HANDLE = 7;
   function gizmo(L) {
     var p = S.project, sc = App.scene(), k = S.view.scale;
-    var tr = R.transformAt(p, sc, L, S.time), size = R.layerSize(L, p), cam = L.hud ? null : R.cameraOf(p, sc, S.time);
+    var tr = R.transformAt(p, sc, L, S.time), size = R.layerSize(L, p), cam = R.layerCamera(p, sc, S.time, L);
     var c = R.corners(L, tr, size).map(function (pt) { var v = R.toView(cam, pt); return { x: v.x * k, y: v.y * k }; });
     var mid = function (a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
     var edges = [mid(c[0], c[1]), mid(c[1], c[2]), mid(c[2], c[3]), mid(c[3], c[0])];

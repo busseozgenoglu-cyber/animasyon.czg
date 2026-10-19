@@ -126,20 +126,30 @@
     if (Math.abs(v.zoom - 1) < 1e-6 && Math.abs(v.x - 0.5) < 1e-6 && Math.abs(v.y - 0.5) < 1e-6) return null;
     return { zoom: v.zoom, cx: v.x * project.width, cy: v.y * project.height, W: project.width, H: project.height };
   }
+  /* Katmanın paralaks oranına göre kamerası: uzak katmanlar kameraya daha az tepki verir */
+  function camFor(cam, layer) {
+    if (!cam || layer.hud) return null;
+    var p = layer.parallax == null ? 1 : layer.parallax;
+    if (p === 1) return cam;
+    if (p <= 0) return null;
+    return { zoom: 1 + (cam.zoom - 1) * p, cx: cam.W / 2 + (cam.cx - cam.W / 2) * p, cy: cam.H / 2 + (cam.cy - cam.H / 2) * p, W: cam.W, H: cam.H };
+  }
+  function layerCamera(project, scene, t, layer) { return camFor(cameraOf(project, scene, t), layer); }
+  function applyCam(ctx, cam) { ctx.translate(cam.W / 2, cam.H / 2); ctx.scale(cam.zoom, cam.zoom); ctx.translate(-cam.cx, -cam.cy); }
   function toView(cam, pt) { if (!cam) return pt; return { x: (pt.x - cam.cx) * cam.zoom + cam.W / 2, y: (pt.y - cam.cy) * cam.zoom + cam.H / 2 }; }
   function fromView(cam, pt) { if (!cam) return pt; return { x: (pt.x - cam.W / 2) / cam.zoom + cam.cx, y: (pt.y - cam.H / 2) / cam.zoom + cam.cy }; }
-  function viewCorners(project, scene, t, layer, tr, size) { var cam = layer.hud ? null : cameraOf(project, scene, t); return corners(layer, tr, size).map(function (p) { return toView(cam, p); }); }
+  function viewCorners(project, scene, t, layer, tr, size) { var cam = layerCamera(project, scene, t, layer); return corners(layer, tr, size).map(function (p) { return toView(cam, p); }); }
   function viewPoint(project, scene, t, pt) { return toView(cameraOf(project, scene, t), pt); }
 
   function hitTest(project, scene, t, px, py) {
-    var cam = cameraOf(project, scene, t), vx = px, vy = py;
-    if (cam) { var q = fromView(cam, { x: px, y: py }); px = q.x; py = q.y; }
+    var cam = cameraOf(project, scene, t);
     for (var i = scene.layers.length - 1; i >= 0; i--) {
       var L = scene.layers[i];
       if (L.locked || !M.layerVisibleAt(L, t, scene.duration)) continue;
       var size = layerSize(L, project), tr = transformAt(project, scene, L, t);
       if (tr.opacity <= 0.02) continue;
-      var lp = localPoint(L, tr, size, L.hud ? vx : px, L.hud ? vy : py);
+      var q = fromView(camFor(cam, L), { x: px, y: py });
+      var lp = localPoint(L, tr, size, q.x, q.y);
       if (!lp || lp.u < 0 || lp.u > 1 || lp.v < 0 || lp.v > 1) continue;
       if (L.type === "text") return L;
       var e = getEntry(M.frameAt(L, t));
@@ -249,17 +259,29 @@
   }
 
   /* Sahne geçişi için siyah örtü yoğunluğu (0..1): bu sahnenin sonu + önceki sahnenin başı */
-  function transitionAlpha(project, sceneIndex, t) {
-    var scene = project.scenes[sceneIndex], a = 0;
-    if (scene.transition && scene.transition.type === "fade" && sceneIndex < project.scenes.length - 1) {
+  /* Sahne geçişi: { type, p } — p örtme oranı (1 = tamamen kapalı); sahne sonunda artar, sonrakinin başında azalır */
+  function transitionState(project, sceneIndex, t) {
+    var scene = project.scenes[sceneIndex], best = null;
+    function consider(type, p, phase) { if (p > 0 && (!best || p > best.p)) best = { type: type, p: p, phase: phase }; }
+    if (scene.transition && scene.transition.type !== "none" && sceneIndex < project.scenes.length - 1) {
       var d = scene.transition.duration;
-      a = Math.max(a, M.clamp((t - (scene.duration - d)) / d, 0, 1));
+      consider(scene.transition.type, M.clamp((t - (scene.duration - d)) / d, 0, 1), "out");
     }
     var prev = sceneIndex > 0 ? project.scenes[sceneIndex - 1] : null;
-    if (prev && prev.transition && prev.transition.type === "fade") {
-      a = Math.max(a, M.clamp(1 - t / prev.transition.duration, 0, 1));
-    }
-    return a;
+    if (prev && prev.transition && prev.transition.type !== "none") consider(prev.transition.type, M.clamp(1 - t / prev.transition.duration, 0, 1), "in");
+    return best;
+  }
+  function transitionAlpha(project, sceneIndex, t) { var s = transitionState(project, sceneIndex, t); return s && s.type === "fade" ? s.p : 0; }
+  function drawTransition(ctx, w, h, s) {
+    if (!s || s.p <= 0) return;
+    ctx.save(); ctx.fillStyle = "#000";
+    if (s.type === "iris") {   // daire açılır / kapanır (klasik çizgi film)
+      var maxR = Math.hypot(w, h) / 2, r = maxR * (1 - s.p);
+      ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.arc(w / 2, h / 2, Math.max(0, r), 0, Math.PI * 2, true); ctx.fill("evenodd");
+    } else if (s.type === "wipe") {   // soldan sağa silme
+      if (s.phase === "out") ctx.fillRect(0, 0, Math.ceil(w * s.p), h); else ctx.fillRect(Math.floor(w * (1 - s.p)), 0, Math.ceil(w * s.p) + 1, h);
+    } else { ctx.globalAlpha = s.p; ctx.fillRect(0, 0, w, h); }
+    ctx.restore();
   }
 
   /* opts: { forExport, onion, sceneIndex } */
@@ -268,30 +290,34 @@
     var w = project.width, h = project.height;
     ctx.clearRect(0, 0, w, h);
     drawBackground(ctx, project, scene, !!opts.forExport);
-    var cam = cameraOf(project, scene, t);
-    ctx.save();
-    if (cam) { ctx.translate(w / 2, h / 2); ctx.scale(cam.zoom, cam.zoom); ctx.translate(-cam.cx, -cam.cy); }
-    var i, L;
+    var cam = cameraOf(project, scene, t), i, L;
+    function drawWithCam(layer, tt, alphaMul) {
+      var c2 = camFor(cam, layer);
+      ctx.save();
+      if (c2) applyCam(ctx, c2);
+      drawLayer(ctx, project, scene, layer, tt, alphaMul);
+      ctx.restore();
+    }
     if (opts.onion && !opts.forExport) {
       var step = 1 / project.fps;
       [t - step, t + step].forEach(function (tt) {
         if (tt < 0 || tt >= scene.duration) return;
-        for (i = 0; i < scene.layers.length; i++) { L = scene.layers[i]; if (!L.hud && M.layerVisibleAt(L, tt, scene.duration)) drawLayer(ctx, project, scene, L, tt, 0.25); }
+        for (i = 0; i < scene.layers.length; i++) { L = scene.layers[i]; if (!L.hud && M.layerVisibleAt(L, tt, scene.duration)) drawWithCam(L, tt, 0.25); }
       });
     }
     for (i = 0; i < scene.layers.length; i++) {
       L = scene.layers[i];
-      if (!L.hud && M.layerVisibleAt(L, t, scene.duration)) drawLayer(ctx, project, scene, L, t, 1);
+      if (!L.hud && M.layerVisibleAt(L, t, scene.duration)) drawWithCam(L, t, 1);
     }
-    ctx.restore();
-    for (i = 0; i < scene.layers.length; i++) {   // ekran katmanları (alt yazı, sahne başlığı): kamera yakınlaşmasından etkilenmez
+    // Renk tonu (gece mavisi, akşam sıcaklığı): ekran katmanları hariç; saydam arka planda uygulanmaz
+    if (scene.grade && scene.grade.alpha > 0 && !(scene.background && scene.background.type === "transparent")) {
+      ctx.save(); ctx.globalCompositeOperation = "multiply"; ctx.globalAlpha = scene.grade.alpha; ctx.fillStyle = scene.grade.color; ctx.fillRect(0, 0, w, h); ctx.restore();
+    }
+    for (i = 0; i < scene.layers.length; i++) {   // ekran katmanları (alt yazı, sahne başlığı): kamera ve tondan etkilenmez
       L = scene.layers[i];
       if (L.hud && M.layerVisibleAt(L, t, scene.duration)) drawLayer(ctx, project, scene, L, t, 1);
     }
-    if (opts.sceneIndex != null) {
-      var a = transitionAlpha(project, opts.sceneIndex, t);
-      if (a > 0) { ctx.fillStyle = "rgba(0,0,0," + a.toFixed(3) + ")"; ctx.fillRect(0, 0, w, h); }
-    }
+    if (opts.sceneIndex != null) drawTransition(ctx, w, h, transitionState(project, opts.sceneIndex, t));
   }
 
   /* Katman listesi için küçük resim */
@@ -329,7 +355,8 @@
   root.Render = {
     loadAsset: loadAsset, ensureAssets: ensureAssets, getEntry: getEntry, dropAsset: dropAsset,
     layerSize: layerSize, textLayout: textLayout, layerCtx: layerCtx, transformAt: transformAt,
-    corners: corners, localPoint: localPoint, hitTest: hitTest, cameraOf: cameraOf, toView: toView, fromView: fromView, viewCorners: viewCorners, viewPoint: viewPoint,
+    corners: corners, localPoint: localPoint, hitTest: hitTest, cameraOf: cameraOf, layerCamera: layerCamera, toView: toView, fromView: fromView, viewCorners: viewCorners, viewPoint: viewPoint,
+    transitionState: transitionState,
     drawBackground: drawBackground, drawLayer: drawLayer, drawScene: drawScene, transitionAlpha: transitionAlpha,
     thumbnail: thumbnail, invalidateThumbs: invalidateThumbs, roundRect: roundRect
   };
