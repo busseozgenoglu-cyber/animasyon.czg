@@ -70,7 +70,11 @@ Ali ve Ayşe sağa çıkar.
   Kamera hareketi sıradaki replikle örtüşür; stüdyoda sahne özelliklerindeki **Kamera** bölümünden ve zaman çizelgesindeki kamera satırından elle de kurulur.
 - **Ses efektleri:** balon açılırken *pop*, giriş/çıkışta *vınn*, zıplamada *boing*, düşmede *güm*, alkış, başlıkta çan. Dosya gerekmez (tarayıcıda sentezlenir);
   önizlemede çalar, WebM/MP4 dışa aktarımına müzikle birlikte karışır. Sihirbazın ayarlarından kapatılabilir.
-- **Hava durumu:** sahne başlığına `YAĞMURLU`, `KARLI`, `SİSLİ` ekle (`SAHNE 2 - PARK - AKŞAM - YAĞMURLU`): yağmur ya da kar karakterlerin önünde akar, ton soğur.
+- **Hava durumu:** sahne başlığına `YAĞMURLU`, `KARLI`, `SİSLİ`, `RÜZGARLI` ekle (`SAHNE 2 - PARK - AKŞAM - YAĞMURLU`): yağmur ya da kar karakterlerin önünde akar,
+  gökyüzü kapanır ve ton soğur; siste beyaz tüller süzülür; rüzgârda ağaçlar sallanır, bulutlar hızlanır, yapraklar uçuşur.
+- **Derinlikli arka plan:** çizilen mekânlar beş katmandır (gökyüzü, uzak, orta, ağaçlar, zemin) ve kamera hareketinde farklı hızda kayar;
+  parkta bank ve çiçekler, ormanda katmanlı çamlar ve mantarlar, şehirde sokak lambaları ve uzak silüet, denizde yelkenli ve kayalar, dağda karlı zirveler, odada kitaplık, okulda kara tahta ve duvar saati. Yağmur, kar ve sis karakterlerin önünde, replik balonlarının altında kalır.
+- **Ortam sesi:** her sahne kendi sesini taşır (yağmur, rüzgâr, gündüz kuşlar, gece cırcır böcekleri, dalga, şehir uğultusu, uzay uğultusu; iç mekânda yağmur camdan kısık duyulur); dosya gerekmez, sentezlenir.
 - **Nesneler:** `Ali topu Ayşe'ye atar.` → top kavisle uçar ve Ayşe'nin eline gelir; `Ayşe topu yakalar.` (top, elma, taş, kartopu). Sarılınca kalpler yükselir,
   düşünce baş döndüren yıldızlar döner, korkuda ter damlası düşer, koşuda hız çizgileri çıkar.
 - **Hayvanlar:** `Karabaş havlar.`, `Pamuk miyavlar.`, `Cik cıvıldar.`, `Karabaş kuyruk sallar.` → ses balonu ve hareket.
@@ -80,7 +84,8 @@ Ali ve Ayşe sağa çıkar.
   sahneler arası sırayla silme ve siyaha geçiş, son sahnede iris kapanışı; gece mavisi / akşam turuncusu / sabah sıcaklığı renk tonu;
   kamera hareketinde arka plan ve bulutlar daha az kayar (paralaks derinliği) ve kamera konuşana doğru fark edilmeden kayar;
   kızgın, şaşkın, korkmuş, üzgün ve fısıltılı repliklerde kamera konuşana yakın çekim yapar; soru ve ünlemden sonra kısa bir tepki beklemesi vardır;
-  seslendirme sırasında müzik kısılır (önizlemede ve videoda); başlık kartında parıltılar süzülür;
+  seslendirme sırasında müzik kısılır (önizlemede ve videoda); başlık kartında parıltılar süzülür; konuşma balonu duyguya uyar (öfkede titrer ve pembeleşir,
+  korkuda titreşir, sevinçte zıplar, şaşkınlıkta esner, fısıltıda solar);
   yürürken hareket yönüne eğilir, dönüşte esner, varışta yerine oturur; zıplayınca ve düşünce yerde toz bulutu çıkar; boş anlarda ufak kıpırdanır;
   dinleyenler ünlemde irkilir, öfkeli replikte geri çekilir, üzgün replikte yaklaşır. Kamera ipucu olmayan konuşmalı sahnelerde kamera fark edilmeden yaklaşır.
   Çizilen arka planlarda ortam canlıdır: gündüz kuşlar geçer, kırda ve ormanda kelebekler uçar, gece ateşböcekleri ve parıldayan yıldızlar, akşam ve ormanda düşen yapraklar, uzayda kuyruklu yıldız.

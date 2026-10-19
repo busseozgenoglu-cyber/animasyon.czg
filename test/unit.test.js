@@ -230,6 +230,7 @@ console.log("Senaryo ayrıştırıcı (Director)");
   ok(D.analyze("SAHNE 1\nALİ: \nALİ: Merhaba", []).stats.lines === 1, "boş replik satırı sayılmaz");
   const ast2 = D.parse("PARK - GECE\nANLATICI: Gece oldu.\nİÇ. EV - SABAH\nALİ (fısıldayarak): Şşş.");
   ok(ast2.scenes.length === 2 && ast2.scenes[0].time === "gece" && ast2.scenes[0].items[0].type === "narration" && ast2.scenes[1].place === "EV" && ast2.scenes[1].items[0].emotion === "fısıldayarak", "büyük harf başlık, İÇ./DIŞ. biçimi, anlatıcı ve parantez duygusu");
+  ok(D.emotionOf("fısıltı") === "fisilti" && D.emotionOf("düşünceli") === "dusunceli" && D.emotionOf("yorgun") === "yorgun" && D.emotionOf("sakin") === "", "parantez içi “fısıltı”, “düşünceli”, “yorgun” duyguları tanınır");
 }
 
 console.log("\nTÜM BİRİM TESTLERİ GEÇTİ (" + passed + " kontrol)" + (FFPROBE ? "" : " — ffprobe yok, dış doğrulamalar atlandı"));

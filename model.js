@@ -208,6 +208,7 @@
         if (!q || !Number.isFinite(+q.t) || typeof q.type !== "string") return;
         var cue = { t: Math.max(0, +q.t), type: q.type.slice(0, 20) };
         if (cue.type === "clip") { if (typeof q.clip !== "string" || !p.clips[q.clip]) return; cue.clip = q.clip; }
+        if (cue.type === "amb") { if (typeof q.amb !== "string") return; cue.amb = q.amb.slice(0, 20); cue.dur = Math.max(0.1, +q.dur || 1); if (q.vol != null) cue.vol = Math.max(0.05, Math.min(1, +q.vol || 1)); }
         sc.sfx.push(cue);
       });
       if (Array.isArray(s.layers)) s.layers.forEach(function (l) { var L = normalizeLayer(l, p.assets); if (L) sc.layers.push(L); });

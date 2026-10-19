@@ -33,6 +33,25 @@
     sparkle: function (c, d, at, n) { for (var i = 0; i < 4; i++) tone(c, d, at + i * 0.07, "sine", 1200 + i * 300, 1600 + i * 300, 0.18, 0.08, n); }
   };
 
+  /* ── Ortam sesleri: döngülü gürültü + filtre + yavaş dalgalanma; kuş ve cırcır böceği kısa tonlardan ── */
+  function hold(ctx, dest, at, dur, peak) { var g = ctx.createGain(); g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(peak, at + Math.min(0.8, dur / 3)); g.gain.setValueAtTime(peak, at + Math.max(dur - 0.8, Math.min(0.8, dur / 3))); g.gain.exponentialRampToValueAtTime(0.0001, at + dur); g.connect(dest); return g; }
+  function loopNoise(c, d, at, dur, type, f0, q, peak, nodes, lfo) {
+    var s = c.createBufferSource(); s.buffer = noise(c); s.loop = true;
+    var f = c.createBiquadFilter(); f.type = type; f.frequency.value = f0; f.Q.value = q || 0.7;
+    var g = hold(c, d, at, dur, peak);
+    if (lfo) { var o = c.createOscillator(); o.type = "sine"; o.frequency.value = lfo.rate; var og = c.createGain(); og.gain.value = lfo.depth; o.connect(og); og.connect(lfo.target === "freq" ? f.frequency : g.gain); o.start(at); o.stop(at + dur + 0.05); nodes.push(o); }
+    s.connect(f); f.connect(g); s.start(at); s.stop(at + dur + 0.05); nodes.push(s);
+  }
+  function ambRnd(seed, i) { var h = 2166136261 ^ (seed * 16777619 + i * 2654435761); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+  var AMB = {
+    rain: function (c, d, at, dur, n) { loopNoise(c, d, at, dur, "highpass", 1800, 0.5, 0.16, n); loopNoise(c, d, at, dur, "bandpass", 500, 0.4, 0.07, n, { rate: 0.2, depth: 0.03, target: "gain" }); },
+    wind: function (c, d, at, dur, n) { loopNoise(c, d, at, dur, "bandpass", 380, 1.1, 0.2, n, { rate: 0.13, depth: 200, target: "freq" }); loopNoise(c, d, at, dur, "lowpass", 220, 0.5, 0.09, n, { rate: 0.09, depth: 0.05, target: "gain" }); },
+    waves: function (c, d, at, dur, n) { loopNoise(c, d, at, dur, "lowpass", 650, 0.6, 0.18, n, { rate: 0.11, depth: 0.1, target: "gain" }); loopNoise(c, d, at, dur, "highpass", 2500, 0.5, 0.03, n, { rate: 0.11, depth: 0.02, target: "gain" }); },
+    city: function (c, d, at, dur, n, seed) { loopNoise(c, d, at, dur, "lowpass", 170, 0.8, 0.12, n, { rate: 0.3, depth: 0.03, target: "gain" }); for (var t = at + 2 + ambRnd(seed, 1) * 4, i = 0; t < at + dur - 1 && i < 20; t += 6 + ambRnd(seed, i + 2) * 6, i++) tone(c, d, t, "square", 420 + (i % 3) * 60, 400 + (i % 3) * 60, 0.35, 0.03, n); },
+    space: function (c, d, at, dur, n) { var o = c.createOscillator(); o.type = "sine"; o.frequency.value = 55; var o2 = c.createOscillator(); o2.type = "triangle"; o2.frequency.value = 82.5; var g = hold(c, d, at, dur, 0.08), g2 = hold(c, d, at, dur, 0.025); o.connect(g); o2.connect(g2); o.start(at); o.stop(at + dur + 0.05); o2.start(at); o2.stop(at + dur + 0.05); n.push(o, o2); },
+    birds: function (c, d, at, dur, n, seed) { for (var t = at + 0.6, i = 0; t < at + dur - 0.3 && i < 300; t += 0.9 + ambRnd(seed, i) * 2.6, i++) { var f0 = 2300 + ambRnd(seed, i + 500) * 1500, m = 2 + (i % 2); for (var j = 0; j < m; j++) tone(c, d, t + j * 0.085, "sine", f0, f0 * 1.45, 0.06, 0.045, n); } },
+    crickets: function (c, d, at, dur, n, seed) { for (var t = at + 0.4, i = 0; t < at + dur - 0.2 && i < 400; t += 0.5 + ambRnd(seed, i) * 0.3, i++) for (var j = 0; j < 4; j++) tone(c, d, t + j * 0.028, "sine", 4300, 4300, 0.014, 0.03, n); }
+  };
   /* Projedeki tüm ipuçları küresel zamanla ([start, end) aralığı); seslendirme klipleri aralıkla örtüşüyorsa dahil edilir */
   function cues(project, start, end) {
     var out = [], acc = 0, s0 = start || 0, e0 = end == null ? Infinity : end, clips = project.clips || {};
@@ -42,6 +61,10 @@
         if (q.type === "clip") {
           var c = clips[q.clip];
           if (c && c.duration > 0 && T + c.duration > s0 + 1e-6 && T < e0) out.push({ t: T, type: "clip", clip: q.clip, dur: c.duration });
+          return;
+        }
+        if (q.type === "amb") {
+          if (AMB[q.amb] && q.dur > 0 && T + q.dur > s0 + 1e-6 && T < e0) out.push({ t: T, type: "amb", amb: q.amb, dur: q.dur, vol: q.vol == null ? 1 : q.vol });
           return;
         }
         if (T >= s0 - 1e-6 && T < e0 && SYN[q.type]) out.push({ t: T, type: q.type });
@@ -132,6 +155,11 @@
         try { s.start(when + Math.max(0, q.t - fromT), offset); nodes.push(s); } catch (e) { /* yoksay */ }
         return;
       }
+      if (q.type === "amb") {
+        var off2 = Math.max(0, fromT - q.t), remain = q.dur - off2;
+        if (remain > 0.3 && AMB[q.amb]) { var ag = g; if (q.vol != null && q.vol < 1) { ag = ctx.createGain(); ag.gain.value = q.vol; ag.connect(g); } AMB[q.amb](ctx, ag, when + Math.max(0, q.t - fromT), remain, nodes, Math.round(q.t * 10)); }
+        return;
+      }
       if (q.t < fromT - 0.02) return;
       SYN[q.type](ctx, g, when + (q.t - fromT), nodes);
     });
@@ -174,5 +202,5 @@
     }
     return 1;
   }
-  root.Sfx = { TYPES: Object.keys(SYN), cues: cues, schedule: schedule, prepare: prepare, mouthEnvelope: mouthEnvelope, duck: duck, DUCK: DUCK, live: live };
+  root.Sfx = { TYPES: Object.keys(SYN), AMBIENTS: Object.keys(AMB), cues: cues, schedule: schedule, prepare: prepare, mouthEnvelope: mouthEnvelope, duck: duck, DUCK: DUCK, live: live };
 })(window);
