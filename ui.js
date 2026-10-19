@@ -791,7 +791,7 @@
     var st = sc.settings;
     $("scCharHeight").value = Math.round(st.charHeight * 100); $("scCharHeightLabel").textContent = "%" + Math.round(st.charHeight * 100) + " (sahne yüksekliğine göre)";
     $("scSpeed").value = st.speed; $("scBubble").value = st.bubbleStyle;
-    $("scTitle").checked = st.titleCard; $("scEnd").checked = st.endCard; $("scHeadings").checked = st.headings; $("scFade").checked = st.fade;
+    $("scTitle").checked = st.titleCard; $("scEnd").checked = st.endCard; $("scHeadings").checked = st.headings; $("scFade").checked = st.fade; $("scOno").checked = st.onomatopoeia !== false;
     $("scSizeNote").textContent = "Film boyutu " + p.width + "×" + p.height + ", " + p.fps + " fps (sol paneldeki Film ayarlarından değişir).";
     UI.renderScriptPreview();
   };
@@ -838,7 +838,7 @@
     $("scCharHeight").addEventListener("change", function () { App.commit(); });
     $("scSpeed").addEventListener("change", function () { App.ensureScript().settings.speed = $("scSpeed").value; App.commit(); UI.renderScriptPreview(); });
     $("scBubble").addEventListener("change", function () { App.ensureScript().settings.bubbleStyle = $("scBubble").value; App.commit(); });
-    [["scTitle", "titleCard"], ["scEnd", "endCard"], ["scHeadings", "headings"], ["scFade", "fade"]].forEach(function (pair) {
+    [["scTitle", "titleCard"], ["scEnd", "endCard"], ["scHeadings", "headings"], ["scFade", "fade"], ["scOno", "onomatopoeia"]].forEach(function (pair) {
       $(pair[0]).addEventListener("change", function () { App.ensureScript().settings[pair[1]] = $(pair[0]).checked; App.commit(); });
     });
     var buildCtl = null;

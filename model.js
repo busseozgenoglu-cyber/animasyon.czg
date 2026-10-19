@@ -46,7 +46,7 @@
   function newCamera() { return { base: { zoom: 1, x: 0.5, y: 0.5 }, tracks: { zoom: [], x: [], y: [] } }; }
 
   function newScript() {
-    return { text: "", cast: [], backgrounds: [], settings: { charHeight: 0.42, speed: "normal", bubbleStyle: "white", titleCard: true, endCard: true, headings: true, fade: true, sfx: true },
+    return { text: "", cast: [], backgrounds: [], settings: { charHeight: 0.42, speed: "normal", bubbleStyle: "white", titleCard: true, endCard: true, headings: true, fade: true, sfx: true, onomatopoeia: true },
       voice: newVoice() };
   }
   /* Seslendirme (SesKlon): kadro sesleri karakterlerde (voiceId), anlatıcı ve stil burada */
@@ -68,7 +68,7 @@
     return {
       content: "Merhaba!", font: FONTS[1].id, size: 56, weight: "700", color: "#1b1f2a",
       stroke: "#ffffff", strokeWidth: 0, align: "center",
-      bubble: true, bubbleColor: "#ffffff", bubbleTail: "left", maxWidth: 520, lineHeight: 1.25
+      bubble: true, bubbleColor: "#ffffff", bubbleTail: "left", bubbleShape: "round", maxWidth: 520, lineHeight: 1.25
     };
   }
 
@@ -79,8 +79,8 @@
       type: type, visible: true, locked: false,
       frames: opts.frames ? opts.frames.slice() : [], frameFps: opts.frameFps || 8, frameMode: opts.frameMode || "loop",
       text: type === "text" ? Object.assign(newText(), opts.text || {}) : null,
-      base: Object.assign({ x: 0, y: 0, rot: 0, sx: 1, sy: 1, opacity: 1 }, opts.base || {}),
-      tracks: { x: [], y: [], rot: [], sx: [], sy: [], opacity: [] },
+      base: Object.assign({ x: 0, y: 0, rot: 0, sx: 1, sy: 1, opacity: 1, blur: 0 }, opts.base || {}),
+      tracks: { x: [], y: [], rot: [], sx: [], sy: [], opacity: [], blur: [] },
       anchor: Object.assign({ x: 0.5, y: 0.5 }, opts.anchor || {}),
       flipX: false, flipY: false,
       inPoint: opts.inPoint || 0, outPoint: opts.outPoint == null ? null : opts.outPoint,
@@ -119,14 +119,14 @@
         stroke: str(t.stroke, d.stroke, 32), strokeWidth: num(t.strokeWidth, 0, 0, 40),
         align: oneOf(t.align, ["left", "center", "right"], "center"),
         bubble: bool(t.bubble, true), bubbleColor: str(t.bubbleColor, d.bubbleColor, 32),
-        bubbleTail: oneOf(t.bubbleTail, ["none", "left", "right"], "left"),
+        bubbleTail: oneOf(t.bubbleTail, ["none", "left", "right"], "left"), bubbleShape: oneOf(t.bubbleShape, ["round", "thought", "shout"], "round"),
         maxWidth: num(t.maxWidth, d.maxWidth, 40, 4000), lineHeight: num(t.lineHeight, 1.25, 0.8, 3)
       };
     }
     var b = raw.base || {};
-    L.base = { x: num(b.x, 0), y: num(b.y, 0), rot: num(b.rot, 0), sx: num(b.sx, 1, -50, 50), sy: num(b.sy, 1, -50, 50), opacity: num(b.opacity, 1, 0, 1) };
+    L.base = { x: num(b.x, 0), y: num(b.y, 0), rot: num(b.rot, 0), sx: num(b.sx, 1, -50, 50), sy: num(b.sy, 1, -50, 50), opacity: num(b.opacity, 1, 0, 1), blur: num(b.blur, 0, 0, 60) };
     var tk = raw.tracks || {};
-    L.tracks = { x: normalizeTrack(tk.x), y: normalizeTrack(tk.y), rot: normalizeTrack(tk.rot), sx: normalizeTrack(tk.sx), sy: normalizeTrack(tk.sy), opacity: normalizeTrack(tk.opacity) };
+    L.tracks = { x: normalizeTrack(tk.x), y: normalizeTrack(tk.y), rot: normalizeTrack(tk.rot), sx: normalizeTrack(tk.sx), sy: normalizeTrack(tk.sy), opacity: normalizeTrack(tk.opacity), blur: normalizeTrack(tk.blur) };   // blur: alan derinliği (px)
     var a = raw.anchor || {};
     L.anchor = { x: num(a.x, 0.5, -2, 3), y: num(a.y, 0.5, -2, 3) };
     L.flipX = bool(raw.flipX, false); L.flipY = bool(raw.flipY, false);
@@ -239,7 +239,7 @@
     sc.settings = {
       charHeight: num(st.charHeight, 0.42, 0.15, 0.8), speed: oneOf(st.speed, ["slow", "normal", "fast"], "normal"),
       bubbleStyle: oneOf(st.bubbleStyle, ["white", "color"], "white"), titleCard: bool(st.titleCard, true), endCard: bool(st.endCard, true),
-      headings: bool(st.headings, true), fade: bool(st.fade, true), sfx: bool(st.sfx, true)
+      headings: bool(st.headings, true), fade: bool(st.fade, true), sfx: bool(st.sfx, true), onomatopoeia: bool(st.onomatopoeia, true)
     };
     var vo = raw.voice || {};
     sc.voice = { enabled: bool(vo.enabled, false), narratorVoiceId: (typeof vo.narratorVoiceId === "string" && vo.narratorVoiceId.length <= 64) ? vo.narratorVoiceId : null,

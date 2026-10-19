@@ -398,7 +398,7 @@
     var tr = {
       x: trackValue(tk.x, t, b.x), y: trackValue(tk.y, t, b.y),
       rot: trackValue(tk.rot, t, b.rot), sx: trackValue(tk.sx, t, b.sx), sy: trackValue(tk.sy, t, b.sy),
-      opacity: trackValue(tk.opacity, t, b.opacity)
+      opacity: trackValue(tk.opacity, t, b.opacity), blur: trackValue(tk.blur, t, b.blur || 0)
     };
     var acc = { dx: 0, dy: 0, drot: 0, msx: 1, msy: 1, mop: 1, reveal: 1 };
     var effects = layer.effects || [];
@@ -429,7 +429,7 @@
     return {
       x: tr.x + acc.dx, y: tr.y + acc.dy, rot: tr.rot + acc.drot,
       sx: tr.sx * acc.msx, sy: tr.sy * acc.msy,
-      opacity: clamp(tr.opacity * acc.mop, 0, 1), reveal: clamp(acc.reveal, 0, 1)
+      opacity: clamp(tr.opacity * acc.mop, 0, 1), reveal: clamp(acc.reveal, 0, 1), blur: Math.max(0, tr.blur || 0)
     };
   }
 

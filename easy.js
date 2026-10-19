@@ -225,7 +225,7 @@
     var st = script().settings;
     $("wzCharHeight").value = Math.round(st.charHeight * 100); $("wzCharHeightLabel").textContent = "%" + Math.round(st.charHeight * 100);
     $("wzSpeed").value = st.speed; $("wzBubble").value = st.bubbleStyle;
-    $("wzTitle").checked = st.titleCard; $("wzEnd").checked = st.endCard; $("wzHeadings").checked = st.headings; $("wzSfx").checked = st.sfx !== false;
+    $("wzTitle").checked = st.titleCard; $("wzEnd").checked = st.endCard; $("wzHeadings").checked = st.headings; $("wzSfx").checked = st.sfx !== false; $("wzOno").checked = st.onomatopoeia !== false;
   }
   function renderMusic() {
     var p = project(), box = $("wzMusic");
@@ -399,7 +399,7 @@
     $("wzCharHeight").addEventListener("change", function () { App().commit(); });
     $("wzSpeed").addEventListener("change", function () { script().settings.speed = $("wzSpeed").value; App().commit(); renderSummary(); });
     $("wzBubble").addEventListener("change", function () { script().settings.bubbleStyle = $("wzBubble").value; App().commit(); });
-    [["wzTitle", "titleCard"], ["wzEnd", "endCard"], ["wzHeadings", "headings"], ["wzSfx", "sfx"]].forEach(function (pair) { $(pair[0]).addEventListener("change", function () { script().settings[pair[1]] = $(pair[0]).checked; App().commit(); }); });
+    [["wzTitle", "titleCard"], ["wzEnd", "endCard"], ["wzHeadings", "headings"], ["wzSfx", "sfx"], ["wzOno", "onomatopoeia"]].forEach(function (pair) { $(pair[0]).addEventListener("change", function () { script().settings[pair[1]] = $(pair[0]).checked; App().commit(); }); });
     window.addEventListener("resize", function () { if (Easy.open && Easy.step === 3) { fitCanvas(); drawPreview(); } });
     $("wzCanvas").addEventListener("click", function () { if (preview.playing) pausePreview(); else playPreview(); });
   };

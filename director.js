@@ -32,7 +32,7 @@
   var NARRATORS = /^(anlatici|anlatan|dis ses|narrator|ses|yazi|altyazi|alt yazi|not)$/;
 
   var WEATHER_WORDS = [["yagmurlu", "yagmur"], ["yagmur", "yagmur"], ["saganak", "yagmur"], ["yagisli", "yagmur"], ["karli", "kar"], ["kar yagisi", "kar"], ["kar", "kar"], ["tipi", "kar"],
-    ["ruzgarli", "ruzgar"], ["ruzgar", "ruzgar"], ["firtina", "ruzgar"], ["firtinali", "ruzgar"], ["sisli", "sis"], ["sis", "sis"]];
+    ["ruzgarli", "ruzgar"], ["ruzgar", "ruzgar"], ["firtinali", "firtina"], ["firtina", "firtina"], ["gok gurultulu", "firtina"], ["simsekli", "firtina"], ["yildirimli", "firtina"], ["sisli", "sis"], ["sis", "sis"]];
   function splitHeading(s) {
     var parts = String(s || "").split(/\s+[-–—|]\s+|\s*[,/]\s*|\s+-\s+/).map(function (p) { return p.trim(); }).filter(Boolean);
     var time = "", weather = "", place = [];
@@ -87,6 +87,8 @@
 
   /* ── Eylem çözümleme ───────────────────────────────────────── */
   var ACTIONS = [
+    ["knock", /\b(kapi (?:[a-z]+ )?(calar|calinir|calindi|vurulur|vuruldu|tiklanir|tiklandi|caliyor)|kapiyi (calar|caldi|vurur|vurdu)|tak tak)\b/],   // "Kapı çalar.", "Kapı yine çalar.", "Kapı zili çalar."
+    ["ring", /\b((telefon|telefonu|cep telefonu|zil|alarm|saat|calar saat) (?:[a-z]+ )?(calar|caldi|caliyor|oter|otuyor|ottu)|zirr|cin cin|telefon sesi)\b/],   // "Telefon çalar.", "Ali'nin telefonu ısrarla çalar."
     ["turn", /\b(arkasini don|arkasina don|geri don|ters don)/],
     ["hug", /\b(sarilir|sarildi|kucaklar|kucakladi|sarilarak)\b/],
     ["back", /\b(geri cekilir|geri cekildi|gerisin geri|geri adim atar|bir adim geri|geriler|geriledi)\b/],
@@ -205,7 +207,7 @@
           }
           if (a.subjects.length) last = a.subjects;
           if (!a.act) stats.unknownActions.push(it.text);
-          if (!a.subjects.length && !a.all && a.act !== "wait" && !a.camera) {
+          if (!a.subjects.length && !a.all && a.act !== "wait" && !a.camera && a.act !== "knock" && a.act !== "ring") {
             var cand = candidateName(it.text);
             if (cand && names.map(norm).indexOf(norm(cand)) < 0 && stats.candidates.indexOf(cand) < 0 && stats.candidates.length < 5) stats.candidates.push(cand);
           }
@@ -220,7 +222,7 @@
 
   var SPEED = { slow: 0.095, normal: 0.072, fast: 0.055 };
   function lineDuration(text, speed) { return Math.max(1.5, Math.min(8, 1.2 + String(text).length * (SPEED[speed] || SPEED.normal))); }
-  var ACTION_DUR = { enter: 1.1, exit: 1.0, walk: 1.6, walk_to: 1.6, run: 1.0, jump: 1.6, spin: 1.0, turn: 0.4, fall: 0.8, rise: 0.6, fly: 1.4, land: 1.0, wave: 1.4,
+  var ACTION_DUR = { knock: 1.3, ring: 1.6, enter: 1.1, exit: 1.0, walk: 1.6, walk_to: 1.6, run: 1.0, jump: 1.6, spin: 1.0, turn: 0.4, fall: 0.8, rise: 0.6, fly: 1.4, land: 1.0, wave: 1.4,
     laugh: 1.2, cry: 1.6, angry: 1.4, surprise: 1.0, fear: 1.5, dance: 2.4, sit: 0.6, sleep: 1.5, think: 1.6, look: 0.5, grow: 0.9, shrink: 0.9, nod: 1.0, shake_head: 1.0, hide: 0.6, wait: 1.2,
     hug: 1.6, back: 0.8, wake: 0.9, lie: 0.8, clap: 1.2, sing: 2.4, slide: 1.2, swim: 2.0, yawn: 1.4, throw: 0.7, catch: 0.6, bark: 1.2, cam_in: 1.0, cam_out: 1.0, cam_pan: 1.2 };
   var STOP_WORDS = /^(o|bu|su|sonra|ardindan|birden|aniden|hemen|ve|ama|fakat|derken|herkes|hepsi|ikisi|biraz|yavasca|hizla|once|simdi|iste|tam|bir|kisa|uzun|sahne|kamera|muzik|ses|isik)$/;
@@ -371,11 +373,12 @@
     return "kir";
   }
   var OVERCAST = { gunduz: ["#7f8ea3", "#c7d0db"], sabah: ["#9aa6b5", "#d8d2c8"], aksam: ["#6f6f88", "#c9a98f"], gece: ["#0b1a3a", "#1b2f5e"] };
+  var STORM = { gunduz: ["#3f4a5c", "#8c97a8"], sabah: ["#4d5566", "#9c9ea8"], aksam: ["#39394d", "#8a7278"], gece: ["#05091a", "#101a33"] };
   /* Katmanlı arka plan: gökyüzü (paralaks 0,6), uzak (0,75), orta (0,9), ağaçlar (0,93), zemin (1,0).
      Kamera yaklaşıp kayarken katmanlar farklı hızda hareket eder (derinlik); rüzgârda ağaç katmanı sallanır. */
   function drawBackgroundLayers(kind, time, W, H, weather, detail) {
-    var overcast = weather === "yagmur" || weather === "kar" || weather === "sis";
-    var sky = (overcast ? OVERCAST[time] : SKY[time]) || SKY.gunduz, night = time === "gece", k = H / 720;
+    var overcast = weather === "yagmur" || weather === "kar" || weather === "sis" || weather === "firtina";
+    var sky = (weather === "firtina" ? STORM[time] : overcast ? OVERCAST[time] : SKY[time]) || SKY.gunduz, night = time === "gece", k = H / 720;
     var ground = night ? "#223a2a" : time === "aksam" ? "#5f9a3f" : overcast ? "#5fa848" : "#6cc04a";
     var ground2 = night ? "#1a2d21" : time === "aksam" ? "#4e8534" : overcast ? "#45923a" : "#4ea838";
     var farCol = night ? "#2b3f6e" : time === "aksam" ? "#b07c86" : overcast ? "#8a9bb0" : "#8fc1e8";
@@ -734,8 +737,9 @@
       var time = sa.time || "gunduz", kind = placeKind(sa.place), outdoor = kind !== "ic" && kind !== "uzay";
       var userBg = pickBackground(sa);
       sc.grade = GRADES[time] || null;   // günün saatine göre renk tonu (karakterler sahneye oturur)
-      var weather = sa.weather || "";
-      if (weather === "yagmur" && outdoor) sc.grade = time === "gece" ? { color: "#7f93c8", alpha: 0.5 } : { color: "#9fb6c8", alpha: 0.35 };
+      var weather = sa.weather || "", storm = weather === "firtina", rainy = weather === "yagmur" || storm, windy = weather === "ruzgar" || storm;
+      if (storm && outdoor) sc.grade = time === "gece" ? { color: "#6b7aa8", alpha: 0.6 } : { color: "#7d8fa6", alpha: 0.5 };   // fırtına: koyu, soğuk ton
+      else if (weather === "yagmur" && outdoor) sc.grade = time === "gece" ? { color: "#7f93c8", alpha: 0.5 } : { color: "#9fb6c8", alpha: 0.35 };
       else if (weather === "sis" && outdoor) sc.grade = { color: "#d9dee6", alpha: 0.3 };
       var wx = sa.weather || "";
       sc.background = { type: "color", color: (SKY[time] || SKY.gunduz)[0], color2: "#000000", angle: 0, assetId: null };
@@ -760,7 +764,7 @@
           BL.locked = true; BL.parallax = PAR[lk];
           bgLayers.push(BL); bgCov.push(1);
         });
-        if (treesL && wx === "ruzgar") fx(treesL, "swing", 0, null, { strength: 1.6, speed: 0.22 });   // rüzgârda ağaçlar sallanır
+        if (treesL && windy) fx(treesL, "swing", 0, null, { strength: storm ? 2.6 : 1.6, speed: storm ? 0.32 : 0.22 });   // rüzgârda ağaçlar sallanır, fırtınada daha sert
       }
       var pushIn = scenes.length % 2 === 0;   // sahneler sırayla yaklaşır / uzaklaşır: durağan değil, sinema hissi
       bgLayers.forEach(function (BL, bi) { BL.base.sx = BL.base.sy = pushIn ? bgCov[bi] : bgCov[bi] * 1.05; sc.layers.push(BL); });
@@ -768,8 +772,8 @@
         if (!userBg && outdoor) {
           [[0.22, 0.14, 0.85, 22, 0], [0.68, 0.2, 0.6, 14, 1]].forEach(function (cl, i) {
             var cid = genAsset("cloud:" + i, "bulut-" + (i + 1) + ".png", function () { return drawCloud(i); });
-            var L = Model.newLayer("image", { name: "Bulut " + (i + 1), frames: [cid], base: { x: W * cl[0], y: H * cl[1], rot: 0, sx: cl[2] * k, sy: cl[2] * k, opacity: time === "gece" ? 0.35 : 0.95 } });
-            fx(L, "drift", 0, null, { speed: cl[3] * (wx === "ruzgar" ? 3 : 1), dir: "right", wrap: "yes" });
+            var L = Model.newLayer("image", { name: "Bulut " + (i + 1), frames: [cid], base: { x: W * cl[0], y: H * cl[1], rot: 0, sx: cl[2] * k, sy: cl[2] * k, opacity: time === "gece" ? 0.35 : storm ? 0.6 : 0.95 } });
+            fx(L, "drift", 0, null, { speed: cl[3] * (windy ? (storm ? 4 : 3) : 1), dir: "right", wrap: "yes" });
             L.parallax = 0.88;
             sc.layers.push(L);
           });
@@ -929,6 +933,20 @@
         if (!c.flying) { var nStep = 0; for (var ts = a + 0.5 / stepsPerSec; ts < b && nStep < 16; ts += 1 / stepsPerSec, nStep++) cue("step", ts); }
         c.busy.push([a, b]);
       }
+      /* Çizgi roman ses yazısı: GÜM!, HOP!, TAK TAK! — patlayarak belirir, hafifçe yüzer, söner */
+      function sfxText(text, x, y, at, hue, scale) {
+        if (settings.onomatopoeia === false) return null;
+        var s = scale || 1, sz = Math.round(base * 0.07 * s), rot = (hash(text + at.toFixed(1)) % 21) - 10;
+        var L = textLayer("Ses yazısı · " + text, text, { start: Math.max(0, at), end: at + 1.0, anchor: { x: 0.5, y: 0.5 },
+          base: { x: Math.round(Math.max(sz * 1.5, Math.min(W - sz * 1.5, x))), y: Math.round(Math.max(sz, Math.min(H - sz, y))), rot: rot, sx: 1, sy: 1, opacity: 1 },
+          text: { size: sz, font: fonts[2].id, color: hsl(hue == null ? 48 : hue, 95, 60), stroke: "#1b1f2a", strokeWidth: Math.round(5 * k * s), bubble: false, weight: "700", maxWidth: Math.round(W * 0.6) } });
+        fx(L, "popIn", at, at + 0.22); fx(L, "float", at, at + 1.0, { strength: Math.round(4 * k), speed: 1.2, tilt: 2 }); fx(L, "fadeOut", at + 0.7, at + 1.0);
+        sc.layers.push(L);
+        return L;
+      }
+      /* Kamera sarsıntıları (düşme, gök gürültüsü): sahne sonunda kamera yolunun üstüne eklenir */
+      var shakes = [];
+      function srnd(tag) { return (hash("s" + sa.index + ":" + sa.place + ":" + tag) % 1000) / 1000; }
       /* Yerde toz bulutu (iniş, düşme, koşuya başlama) */
       function puff(x, y, at, scale) {
         var pid = genAsset("puff", "toz.png", drawPuff);
@@ -983,14 +1001,15 @@
         else if (emotion === "dusunceli") { fx(L, "lean", a, b, { angle: 3, ramp: 0.4 }); }
         else if (emotion === "yorgun") { fx(L, "lean", a, b, { angle: -4, ramp: 0.6 }); }
       }
-      function bubble(kn, text, a, b, emotion) {
+      function bubble(kn, text, a, b, emotion, inner) {   // inner: düşünce balonu (içinden konuşma)
         var c = chars[kn], cx = curX(kn, a), headTop = c.ground - c.charH;
         var bubbleColor = settings.bubbleStyle === "color" ? hsl(hash(kn) % 360, 70, 90) : "#ffffff";
-        var size = emotion === "fisilti" ? Math.round(bubbleFont * 0.85) : emotion === "kizgin" ? Math.round(bubbleFont * 1.12) : bubbleFont;
+        var shout = !inner && (emotion === "kizgin" || (/!\s*$/.test(text) && /[A-ZÇĞİÖŞÜ]{3,}/.test(text) && text === text.toLocaleUpperCase("tr")));   // kızgın ya da BÜYÜK HARFLE ÜNLEM → bağırma balonu
+        var size = emotion === "fisilti" ? Math.round(bubbleFont * 0.85) : shout ? Math.round(bubbleFont * 1.12) : bubbleFont;
         var L = textLayer("Replik · " + c.def.name + ": " + text.slice(0, 22) + (text.length > 22 ? "…" : ""), text, {
           start: a, end: b, anchor: { x: 0.5, y: 1 },
           base: { x: cx, y: headTop - Math.round(base * 0.015), rot: ((hash(text) % 5) - 2) * 0.7, sx: 1, sy: 1, opacity: 1 },
-          text: { size: size, bubbleColor: bubbleColor, color: "#1b1f2a", bubble: true, bubbleTail: "left", weight: emotion === "kizgin" ? "700" : "700" }
+          text: { size: size, bubbleColor: inner ? "#f4f7ff" : bubbleColor, color: inner ? "#4a5568" : "#1b1f2a", bubble: true, bubbleTail: "left", bubbleShape: inner ? "thought" : shout ? "shout" : "round", weight: "700" }
         });
         var sz = R.layerSize(L, project);
         var half = sz.w / 2 + 8;
@@ -1006,7 +1025,7 @@
         else if (emotion === "saskin") fx(L, "jelly", a, Math.min(b, a + 0.7), { strength: 10, speed: 3 });
         else if (emotion === "uzgun" && settings.bubbleStyle !== "color") L.text.bubbleColor = "#eef0f6";
         else if (emotion === "fisilti" && settings.bubbleStyle !== "color") L.text.bubbleColor = "#f4f4f4";
-        cue("pop", a);
+        if (!inner) cue("pop", a);
         sc.layers.push(L);
         return L;
       }
@@ -1081,7 +1100,8 @@
           if (!cast[kn]) return;
           ensurePresent(kn, t);
           var emotion = emotionOf(it.emotion) || emotionOf(it.text.length < 40 ? "" : "");
-          if (it.emotion && !emotion) warnings.push("Satır " + it.line + ": “(" + it.emotion + ")” duygusu tanınmadı.");
+          var inner = /icinden|kendi kendine|aklindan|dusunur|dusunerek|ic ses|icsel|dusunce/.test(norm(it.emotion || ""));   // (içinden): düşünce balonu, ağız kıpırdamaz
+          if (it.emotion && !emotion && !inner) warnings.push("Satır " + it.line + ": “(" + it.emotion + ")” duygusu tanınmadı.");
           // Konuşan karakter dinleyiciye döner
           if (lastSpeaker && lastSpeaker !== kn && chars[lastSpeaker].present) {
             setFacing(kn, curX(lastSpeaker, t) > curX(kn, t) ? 1 : -1, t);
@@ -1093,8 +1113,10 @@
           chunks.forEach(function (ch) {
             var clip = clipFor(chars[kn].def.voiceId, voStyle, emotion, ch);
             var d = clip ? Math.max(1.2, clip.duration + 0.5) : lineDuration(ch, speed) * (emotion === "fisilti" ? 1.15 : 1);
-            bubble(kn, ch, t, t + d, emotion);
-            if (clip) { cue("clip", t + 0.1, clip.key); talk(kn, t + 0.1, t + 0.1 + clip.duration, emotion, ch, clip.mouth); }
+            bubble(kn, ch, t, t + d, emotion, inner);
+            if (clip) cue("clip", t + 0.1, clip.key);
+            if (inner) { fx(chars[kn].layer, "lean", t, t + d, { angle: 3, ramp: 0.4 }); chars[kn].busy.push([t, t + d]); emote(kn, emotion, t, t + d); }   // düşünür: ağız kapalı, hafif eğilir
+            else if (clip) talk(kn, t + 0.1, t + 0.1 + clip.duration, emotion, ch, clip.mouth);
             else talk(kn, t + 0.1, t + d - 0.2, emotion, ch);
             var bang = /!\s*$/.test(ch);
             if (!emotion) {
@@ -1105,7 +1127,7 @@
             beats.push({ t: t, x: curX(kn, t) / W });
             listeners.forEach(function (o) {
               var right = curX(o, t) > curX(kn, t);
-              if (chars[o].def.look && !chars[o].def.placeholder) looks.push({ kn: o, a: t, b: t + d });
+              if (!inner && chars[o].def.look && !chars[o].def.placeholder) looks.push({ kn: o, a: t, b: t + d });
               if (bang) fx(chars[o].layer, "jelly", t + 0.25, t + 0.6, { strength: 7, speed: 3 });
               if (emotion === "kizgin") fx(chars[o].layer, "lean", t, t + d, { angle: right ? 3 : -3, ramp: 0.4 });
               else if (emotion === "uzgun") fx(chars[o].layer, "lean", t, t + d, { angle: right ? -2 : 2, ramp: 0.6 });
@@ -1129,6 +1151,13 @@
           cameraAct(a, start, dur, lastSpeaker); usedCam = true;
           t = start + dur * 0.5;   // kamera hareketi sıradaki replikle örtüşür
           return;
+        }
+        if (a.act === "knock" || a.act === "ring") {   // kapı / telefon: ses + ses yazısı; sahnedekiler irkilir, kapıya bakar
+          var evKnock = a.act === "knock";
+          cue(a.act, start);
+          sfxText(evKnock ? "TAK TAK!" : "ZIRR ZIRR!", evKnock ? W * 0.88 : W * 0.5, evKnock ? H * 0.4 : H * 0.18, start + 0.05, evKnock ? 35 : 50, 1);
+          order.forEach(function (o) { var oc = chars[o]; if (!oc || !oc.present || !oc.layer) return; fx(oc.layer, "jelly", start + 0.15, start + 0.65, { strength: 8, speed: 3 }); if (evKnock) setFacing(o, 1, start + 0.3); });
+          t = start + dur; return;
         }
         if (!subs.length && a.act !== "wait") {
           var cand = candidateName(it.text);
@@ -1195,7 +1224,7 @@
               ensurePresent(kn, start); dropHeld(kn, start); fx(c.layer, "bounce", start, start + dur, { strength: Math.round(base * 0.09), speed: 1.25, squash: 35 });
               if (start > 0.25) { var sy0 = M.trackValue(c.layer.tracks.sy, start, c.layer.base.sy); key(c.layer, "sy", start - 0.22, sy0, "easeInQuad"); key(c.layer, "sy", start - 0.05, sy0 * 0.86, "easeOutQuad"); key(c.layer, "sy", start + 0.08, sy0, "easeOutQuad"); }   // hazırlık: çömelme
               for (var lt = start + 0.8; lt <= start + dur + 0.01; lt += 0.8) puff(curX(kn, lt), c.ground, lt - 0.05, 0.9);   // her inişte toz
-              if (kn === subs[0]) cue("boing", start + 0.05); break;
+              if (kn === subs[0]) { cue("boing", start + 0.05); sfxText("HOP!", curX(kn, start) + (c.facing >= 0 ? -1 : 1) * c.charH * 0.5, c.ground - c.charH * 1.1, start + 0.1, 48, 0.9); } break;
             }
             case "spin": ensurePresent(kn, start); fx(c.layer, "spin", start, start + dur, { speed: 1 / dur, dir: "cw" }); break;
             case "turn": ensurePresent(kn, start); setFacing(kn, -c.facing || -1, start + 0.1); break;
@@ -1203,7 +1232,7 @@
               L = ensurePresent(kn, start); dropHeld(kn, start);
               key(L, "rot", start, M.trackValue(L.tracks.rot, start, 0)); key(L, "rot", start + dur, c.facing >= 0 ? 82 : -82, "easeOutBounce");
               puff(curX(kn, start) + (c.facing >= 0 ? 1 : -1) * c.charH * 0.35, c.ground, start + dur * 0.7, 1.1);
-              if (kn === subs[0]) cue("thud", start + dur * 0.75);
+              if (kn === subs[0]) { cue("thud", start + dur * 0.75); sfxText("GÜM!", curX(kn, start) + (c.facing >= 0 ? 1 : -1) * c.charH * 0.6, c.ground - c.charH * 0.5, start + dur * 0.72, 18, 1.1); shakes.push({ at: start + dur * 0.72, amp: 0.008, dur: 0.45 }); }
               var stid = genAsset("stars", "yildizlar.png", drawStars), sts = 0.5 * k * (c.charH / (0.42 * base));   // baş döndüren yıldızlar
               var STL = sprite("Yıldızlar", stid, curX(kn, start) + (c.facing >= 0 ? 1 : -1) * c.charH * 0.45, c.ground - c.charH * 0.2, sts, start + dur, start + dur + 1.8, { opacity: 0.95 });
               fx(STL, "spin", start + dur, start + dur + 1.8, { speed: 0.8, dir: "cw" }); fx(STL, "fadeIn", start + dur, start + dur + 0.2); fx(STL, "fadeOut", start + dur + 1.4, start + dur + 1.8);
@@ -1223,13 +1252,15 @@
             case "land": {
               L = ensurePresent(kn, start);
               key(L, "y", start, M.trackValue(L.tracks.y, start, c.ground)); key(L, "y", start + dur, c.ground, "easeOutBounce");
-              if (c.fl) { c.fl.end = start; c.fl = null; } c.flying = false; break;
+              if (c.fl) { c.fl.end = start; c.fl = null; } c.flying = false;
+              if (kn === subs[0]) { cue("thud", start + dur - 0.05); sfxText("PAT!", curX(kn, start) + c.charH * 0.5, c.ground - c.charH * 0.35, start + dur - 0.05, 30, 0.9); puff(curX(kn, start), c.ground, start + dur - 0.05, 1); }
+              break;
             }
             case "wave": ensurePresent(kn, start); fx(c.layer, "swing", start, start + dur, { strength: 6, speed: 2.5 }); break;
-            case "laugh": ensurePresent(kn, start); fx(c.layer, "bounce", start, start + dur, { strength: Math.round(base * 0.02), speed: 3, squash: 20 }); break;
+            case "laugh": ensurePresent(kn, start); fx(c.layer, "bounce", start, start + dur, { strength: Math.round(base * 0.02), speed: 3, squash: 20 }); if (kn === subs[0]) sfxText("HA HA!", curX(kn, start) + (c.facing >= 0 ? 1 : -1) * c.charH * 0.5, c.ground - c.charH * 1.05, start + 0.15, 48, 0.9); break;
             case "cry": ensurePresent(kn, start); fx(c.layer, "lean", start, start + dur, { angle: -8, ramp: 0.4 }); fx(c.layer, "shake", start, start + dur, { strength: Math.round(2 * k), speed: 1.5 }); break;
-            case "angry": ensurePresent(kn, start); fx(c.layer, "shake", start, start + dur, { strength: Math.round(7 * k), speed: 1.2 }); fx(c.layer, "jelly", start, start + dur, { strength: 8, speed: 2 }); break;
-            case "surprise": ensurePresent(kn, start); fx(c.layer, "jelly", start, start + dur, { strength: 18, speed: 2.5 }); fx(c.layer, "bounce", start, start + Math.min(dur, 0.9), { strength: Math.round(base * 0.03), speed: 1.1, squash: 20 }); break;
+            case "angry": ensurePresent(kn, start); fx(c.layer, "shake", start, start + dur, { strength: Math.round(7 * k), speed: 1.2 }); fx(c.layer, "jelly", start, start + dur, { strength: 8, speed: 2 }); if (kn === subs[0]) sfxText("GRRR!", curX(kn, start) + (c.facing >= 0 ? 1 : -1) * c.charH * 0.5, c.ground - c.charH * 1.05, start + 0.1, 8, 0.9); break;
+            case "surprise": ensurePresent(kn, start); fx(c.layer, "jelly", start, start + dur, { strength: 18, speed: 2.5 }); fx(c.layer, "bounce", start, start + Math.min(dur, 0.9), { strength: Math.round(base * 0.03), speed: 1.1, squash: 20 }); if (kn === subs[0]) sfxText("!", curX(kn, start), c.ground - c.charH * 1.15, start + 0.05, 0, 1.3); break;
             case "fear": { ensurePresent(kn, start); fx(c.layer, "shake", start, start + dur, { strength: Math.round(4 * k), speed: 2.2 }); fx(c.layer, "lean", start, start + dur, { angle: -6, ramp: 0.3 }); var fhp = headPos(kn, start); sweat(kn, fhp.x + c.facing * c.charH * 0.22, fhp.y + c.charH * 0.1, start + 0.15); break; }
             case "dance": ensurePresent(kn, start); fx(c.layer, "wobble", start, start + dur, { strength: 10, speed: 2, bob: Math.round(base * 0.02) }); fx(c.layer, "jelly", start, start + dur, { strength: 10, speed: 2 }); break;
             case "sit": { L = ensurePresent(kn, start); key(L, "sy", start, M.trackValue(L.tracks.sy, start, c.scale)); key(L, "sy", start + dur, c.scale * 0.8, "easeOutQuad"); c.sitting = true; break; }
@@ -1254,7 +1285,7 @@
               break;
             }
             case "back": ensurePresent(kn, start); moveTo(kn, curX(kn, start) - (c.facing >= 0 ? 1 : -1) * W * 0.1, start, dur, "walk"); setFacing(kn, c.facing >= 0 ? 1 : -1, start + dur); break;
-            case "clap": ensurePresent(kn, start); fx(c.layer, "pulse", start, start + dur, { strength: 10, speed: 3 }); if (kn === subs[0]) cue("clap", start + 0.1); break;
+            case "clap": ensurePresent(kn, start); fx(c.layer, "pulse", start, start + dur, { strength: 10, speed: 3 }); if (kn === subs[0]) { cue("clap", start + 0.1); sfxText("ŞAK ŞAK!", curX(kn, start) + (c.facing >= 0 ? 1 : -1) * c.charH * 0.5, c.ground - c.charH * 0.8, start + 0.1, 48, 0.8); } break;
             case "bark": { ensurePresent(kn, start); var nb = norm(it.text), say = /miyav/.test(nb) ? "Miyav!" : /civil|cik cik/.test(nb) ? "Cik cik!" : /kukre|bogur/.test(nb) ? "Grrr!" : "Hav hav!";
               fx(c.layer, "talk", start, start + dur, { strength: Math.round(5 * k), speed: 5 }); fx(c.layer, "bounce", start, start + Math.min(dur, 0.8), { strength: Math.round(base * 0.015), speed: 2.5, squash: 12 }); thought(kn, say, start, start + dur + 0.4); if (kn === subs[0]) cue("pop", start); break; }
             case "sing": { ensurePresent(kn, start); fx(c.layer, "talk", start, start + dur, { strength: Math.round(5 * k), speed: 3 }); fx(c.layer, "float", start, start + dur, { strength: Math.round(6 * k), speed: 0.8, tilt: 4 }); thought(kn, "♪ ♫", start, start + dur); break; }
@@ -1264,6 +1295,7 @@
             case "throw": {
               ensurePresent(kn, start); fx(c.layer, "swing", start, start + dur, { strength: 12, speed: 1 / dur }); fx(c.layer, "lean", start, start + dur, { angle: c.facing >= 0 ? 8 : -8, ramp: 0.2 });
               if (a.prop && kn === subs[0]) throwProp(kn, a, start, Math.max(0.6, dur + 0.3));
+              if (kn === subs[0]) sfxText("FIŞŞ!", curX(kn, start) + (c.facing >= 0 ? 1 : -1) * c.charH * 0.65, c.ground - c.charH * 0.85, start + dur * 0.5, 200, 0.8);
               break;
             }
             case "catch": {
@@ -1308,19 +1340,21 @@
           var zA = M.trackValue(sc.camera.tracks.zoom, tA, sc.camera.base.zoom), zD = M.trackValue(sc.camera.tracks.zoom, tD, sc.camera.base.zoom);
           var xA = M.trackValue(sc.camera.tracks.x, tA, sc.camera.base.x), xD = M.trackValue(sc.camera.tracks.x, tD, sc.camera.base.x);
           var yA = M.trackValue(sc.camera.tracks.y, tA, sc.camera.base.y), yD = M.trackValue(sc.camera.tracks.y, tD, sc.camera.base.y);
+          ["zoom", "x", "y"].forEach(function (pp) { sc.camera.tracks[pp] = sc.camera.tracks[pp].filter(function (q) { return q.t <= tA + 1e-4 || q.t >= tD - 1e-4; }); });   // pencere içindeki kayma anahtarları silinir: yakın çekim sabit durur
           camKey("zoom", tA, zA); camKey("zoom", tB, z); camKey("zoom", tC, z); camKey("zoom", tD, zD);
           camKey("x", tA, xA); camKey("x", tB, cx0); camKey("x", tC, cx0); camKey("x", tD, xD);
           camKey("y", tA, yA); camKey("y", tB, cy0); camKey("y", tC, cy0); camKey("y", tD, yD);
         });
       }
       /* Hava durumu: yağmur ve kar karakterlerin önünde, döngüyle akar; rüzgârda yapraklar hızlanır */
-      if ((weather === "yagmur" || weather === "kar") && outdoor) {
-        var wid = genAsset("precip:" + weather + ":" + W + "x" + H, (weather === "kar" ? "kar" : "yagmur") + ".png", function () { return drawPrecip(weather, W, H, weather + W); });
-        [[weather === "kar" ? 7 : 0.9, 0.9, 1], [weather === "kar" ? 11 : 1.4, 0.55, 0.7]].forEach(function (cfg, wi) {
-          var T = cfg[0], WL = Model.newLayer("image", { name: weather === "kar" ? "Kar" : "Yağmur", frames: [wid], base: { x: 0, y: -H, rot: 0, sx: cfg[2], sy: cfg[2], opacity: cfg[1] } });
+      if ((rainy || weather === "kar") && outdoor) {
+        var pk = weather === "kar" ? "kar" : "yagmur";   // fırtınada yağmur daha hızlı ve yoğun
+        var wid = genAsset("precip:" + pk + ":" + W + "x" + H, pk + ".png", function () { return drawPrecip(pk, W, H, pk + W); });
+        [[pk === "kar" ? 7 : storm ? 0.65 : 0.9, storm ? 1 : 0.9, 1], [pk === "kar" ? 11 : storm ? 1.0 : 1.4, storm ? 0.75 : 0.55, 0.7]].forEach(function (cfg, wi) {
+          var T = cfg[0], WL = Model.newLayer("image", { name: pk === "kar" ? "Kar" : "Yağmur", frames: [wid], base: { x: 0, y: -H, rot: 0, sx: cfg[2], sy: cfg[2], opacity: cfg[1] } });
           WL.anchor = { x: 0, y: 0 }; WL.locked = true; WL.parallax = 1;
           for (var cyc = 0; cyc * T < sc.duration + T; cyc++) { M.setKey(WL.tracks.y, cyc * T, -H * cfg[2], "linear"); M.setKey(WL.tracks.y, (cyc + 1) * T - 0.001, 0, "step"); }
-          if (weather === "kar") fx(WL, "float", 0, null, { strength: Math.round(24 * k), speed: 0.25 + wi * 0.1, tilt: 0 });
+          if (pk === "kar") fx(WL, "float", 0, null, { strength: Math.round(24 * k), speed: 0.25 + wi * 0.1, tilt: 0 });
           weatherLayers.push(WL);
         });
       }
@@ -1331,6 +1365,21 @@
           FG.locked = true; fx(FG, "drift", 0, null, { speed: cfg[1], dir: fi ? "left" : "right", wrap: "yes" });
           weatherLayers.push(FG);
         });
+      }
+      if (storm) {   // şimşek: tüm kareyi aydınlatan kısa çakmalar (ekran katmanı), ardından gök gürültüsü ve kamera sarsıntısı
+        var flid = genAsset("flash:" + W + "x" + H, "simsek.png", function () { var fc = canvas(W, H), fxc = fc.getContext("2d"); fxc.fillStyle = "#ffffff"; fxc.fillRect(0, 0, W, H); return fc; });
+        var FL = Model.newLayer("image", { name: "Şimşek", frames: [flid], base: { x: W / 2, y: H / 2, rot: 0, sx: 1, sy: 1, opacity: 0 } });
+        FL.locked = true; FL.hud = true;
+        var nFl = Math.max(1, Math.min(4, Math.round(sc.duration / 6))), fpeak = outdoor ? 0.85 : 0.45, flashes = 0;
+        for (var fi2 = 0; fi2 < nFl; fi2++) {
+          var ft = Math.round((0.8 + (fi2 + srnd("fl" + fi2) * 0.8) * ((sc.duration - 1.8) / nFl)) * 100) / 100;
+          if (ft + 0.6 > sc.duration) break;
+          M.setKey(FL.tracks.opacity, ft, 0, "step"); M.setKey(FL.tracks.opacity, ft + 0.04, fpeak, "step"); M.setKey(FL.tracks.opacity, ft + 0.1, fpeak * 0.25, "step"); M.setKey(FL.tracks.opacity, ft + 0.14, fpeak * 0.8, "linear"); M.setKey(FL.tracks.opacity, ft + 0.4, 0, "linear");   // çift çakma
+          var thAt = Math.round((ft + 0.45 + srnd("th" + fi2) * 0.8) * 100) / 100;   // gürleme uzaktan, biraz gecikmeli
+          cue("thunder", thAt); shakes.push({ at: thAt, amp: 0.005, dur: 0.5 });
+          flashes++;
+        }
+        if (flashes) { var hudAt = -1; for (var hi2 = 0; hi2 < sc.layers.length; hi2++) if (sc.layers[hi2].hud) { hudAt = hi2; break; } if (hudAt < 0) sc.layers.push(FL); else sc.layers.splice(hudAt, 0, FL); }   // alt yazılar çakmanın üstünde kalır
       }
       if (weatherLayers.length) {   // yağmur, kar ve sis karakterlerin önünde ama replik balonları ve altyazıların altında
         var textAt = -1;
@@ -1410,7 +1459,7 @@
             addAmb(CL);
           }
         }
-        if (outdoor && !night && (kind === "orman" || time === "aksam" || weather === "ruzgar") && kind !== "deniz") {   // düşen yapraklar (rüzgârda daha hızlı)
+        if (outdoor && !night && (kind === "orman" || time === "aksam" || windy) && kind !== "deniz") {   // düşen yapraklar (rüzgârda daha hızlı)
           for (var li2 = 0; li2 < 3; li2++) {
             var lh = [28, 40, 15][li2 % 3], lid = genAsset("leaf:" + lh, "yaprak-" + lh + ".png", (function (hh) { return function () { return drawLeaf(hh); }; })(lh));
             var ls0 = (0.5 + rnd01("ls" + li2) * 0.3) * k, lx = W * (0.1 + rnd01("lx" + li2) * 0.8), LT = 7 + rnd01("lt" + li2) * 3, t0l = rnd01("l0" + li2) * LT;
@@ -1422,8 +1471,8 @@
               M.setKey(LL.tracks.y, yb, H * 0.92, "step");
               M.setKey(LL.tracks.y, yb + 0.02, -H * 0.05, "linear");
             }
-            fx(LL, "float", 0, null, { strength: Math.round((weather === "ruzgar" ? 60 : 28) * k), speed: (weather === "ruzgar" ? 0.9 : 0.45) + rnd01("lv" + li2) * 0.2, tilt: 30 });
-            if (weather === "ruzgar") fx(LL, "drift", 0, null, { speed: 90 + rnd01("ld" + li2) * 60, dir: "right", wrap: "yes" });
+            fx(LL, "float", 0, null, { strength: Math.round((windy ? 60 : 28) * k), speed: (windy ? 0.9 : 0.45) + rnd01("lv" + li2) * 0.2, tilt: 30 });
+            if (windy) fx(LL, "drift", 0, null, { speed: 90 + rnd01("ld" + li2) * 60, dir: "right", wrap: "yes" });
             addAmb(LL);
           }
         }
@@ -1475,9 +1524,28 @@
       });
       /* Ortam sesi (sentez): yağmur, rüzgâr, kuşlar, cırcır böcekleri, dalga, şehir, uzay */
       if (settings.sfx !== false) {
-        var amb = kind === "ic" ? (weather === "yagmur" ? "rain" : "") : weather === "yagmur" ? "rain" : (weather === "ruzgar" || weather === "kar") ? "wind" : kind === "deniz" ? "waves" : kind === "sehir" ? "city" : kind === "uzay" ? "space" : (time === "gece" ? "crickets" : "birds");
+        var amb = kind === "ic" ? (rainy ? "rain" : "") : rainy ? "rain" : (windy || weather === "kar") ? "wind" : kind === "deniz" ? "waves" : kind === "sehir" ? "city" : kind === "uzay" ? "space" : (time === "gece" ? "crickets" : "birds");
         if (amb) { var ambCue = { t: 0, type: "amb", amb: amb, dur: Math.round(sc.duration * 100) / 100 }; if (kind === "ic") ambCue.vol = 0.35; sc.sfx.push(ambCue); }   // iç mekânda yağmur camdan kısık duyulur
+        if (storm && outdoor) sc.sfx.push({ t: 0, type: "amb", amb: "wind", dur: Math.round(sc.duration * 100) / 100, vol: 0.7 });   // fırtına: yağmurun üstüne rüzgâr uğultusu
       }
+      /* Kamera sarsıntısı: düşme ve gök gürültüsünde kısa titreme + hafif yaklaşma (mevcut kamera yolunun üstüne) */
+      shakes.forEach(function (sh, si) {
+        var n = 7;
+        if (sh.at < 0.05 || sh.at + sh.dur > sc.duration) return;
+        ["x", "y", "zoom"].forEach(function (prop) {
+          var tr = sc.camera.tracks[prop], pts = [];
+          for (var i = 0; i <= n; i++) { var tt = Math.round((sh.at + sh.dur * i / n) * 1000) / 1000; pts.push({ t: tt, v: M.trackValue(tr, tt, sc.camera.base[prop]) }); }
+          pts.forEach(function (p, i) {
+            var decay = 1 - i / n, edge = i === 0 || i === n;
+            var d = edge ? 0 : prop === "zoom" ? 0.03 * decay : (srnd("sh" + si + prop + i) - 0.5) * 2 * sh.amp * decay;
+            M.setKey(tr, p.t, Math.round((p.v + d) * 10000) / 10000, "linear");
+          });
+        });
+      });
+      /* Alan derinliği: kamera yaklaşınca uzak arka plan katmanları bulanır, karakter öne çıkar */
+      var zk = sc.camera.tracks.zoom;
+      function blurOf(z) { return Math.round(Math.max(0, Math.min(10 * k, (z - 1.1) * 30 * k)) * 10) / 10; }
+      if (zk.length && zk.some(function (q) { return blurOf(q.v) > 0; })) bgLayers.forEach(function (BL) { if (BL.parallax <= 0.9) zk.forEach(function (q) { M.setKey(BL.tracks.blur, q.t, blurOf(q.v), q.e); }); });
       var isLast = sa.index === ast.scenes.length;
       if (isLast) fade(sc, "iris", 0.8); else fade(sc, scenes.length % 2 ? "wipe" : "fade", 0.5);
       scenes.push(sc);
@@ -1548,7 +1616,8 @@
     "2 saniye bekler.               → süre.   BAŞLIK: Film adı   YAZAN: Adınız   → açılış kartı",
     "Kamera Ayşe'ye yaklaşır.       → yakın çekim.   Kamera uzaklaşır. → genel plan.   Kamera sağa kayar. → kaydırma",
     "Karabaş havlar.                → hayvan sesi balonu (havlar, miyavlar, cıvıldar). Herkes ... → sahnedeki tüm karakterler",
-    "SAHNE 2 - PARK - AKŞAM - YAĞMURLU → hava: YAĞMURLU, KARLI, SİSLİ, RÜZGARLI.   Ali topu Ayşe'ye atar. / Ayşe topu yakalar. → nesne uçar (top, elma, taş, kartopu)"
+    "SAHNE 2 - PARK - AKŞAM - YAĞMURLU → hava: YAĞMURLU, KARLI, SİSLİ, RÜZGARLI, FIRTINALI (şimşek + gök gürültüsü).   Ali topu Ayşe'ye atar. / Ayşe topu yakalar. → nesne uçar",
+    "AYŞE (içinden): Keşke...        → düşünce balonu.   ALİ (kızgın): Kim o?! → bağırma balonu.   Kapı çalar. / Telefon çalar. → ses + TAK TAK! yazısı"
   ].join("\n");
 
   return { parse: parse, analyze: analyze, analyzeAction: analyzeAction, splitLine: splitLine, lineDuration: lineDuration, emotionOf: emotionOf,

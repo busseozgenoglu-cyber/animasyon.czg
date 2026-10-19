@@ -193,22 +193,67 @@
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
   }
 
+  /* Dikdörtgen çevresinde p∈[0,1) konumu ve dışa bakan normal (üst → sağ → alt → sol) */
+  function perimeterAt(x, y, w, h, p) {
+    var P = 2 * (w + h), d = p * P;
+    if (d < w) return { x: x + d, y: y, nx: 0, ny: -1 };
+    d -= w; if (d < h) return { x: x + w, y: y + d, nx: 1, ny: 0 };
+    d -= h; if (d < w) return { x: x + w - d, y: y + h, nx: 0, ny: 1 };
+    d -= w; return { x: x, y: y + h - d, nx: -1, ny: 0 };
+  }
+  /* Düşünce balonu: dikdörtgen + çevresinde yuvarlak kabarcıklar (birleşik dolgu) */
+  function thoughtPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    var n = Math.max(8, Math.round(2 * (w + h) / (r * 1.5)));
+    for (var i = 0; i < n; i++) { var q = perimeterAt(x, y, w, h, i / n); ctx.moveTo(q.x + r, q.y); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); }
+    ctx.rect(x, y, w, h);
+  }
+  /* Bağırma balonu: sivri dişli tek çokgen; kuyruk, konuşana en yakın alt dişin uzatılmasıdır */
+  function shoutPath(ctx, x, y, w, h, size, tailX, tailLen) {
+    var spike = size * 0.42, inset = size * 0.08, n = Math.max(12, Math.round(2 * (w + h) / (size * 0.9)));
+    var tailI = -1, best = 1e9;
+    if (tailX != null) for (var j = 0; j < n; j++) { var qq = perimeterAt(x, y, w, h, j / n); if (qq.ny === 1 && Math.abs(qq.x - tailX) < best) { best = Math.abs(qq.x - tailX); tailI = j; } }
+    ctx.beginPath();
+    for (var i = 0; i < n; i++) {
+      var a = perimeterAt(x, y, w, h, i / n), b = perimeterAt(x, y, w, h, (i + 0.5) / n), s = i === tailI ? tailLen : spike;
+      var ax = i === tailI ? tailX : a.x + a.nx * s, ay = a.y + a.ny * s;
+      if (i === 0) ctx.moveTo(ax, ay); else ctx.lineTo(ax, ay);
+      ctx.lineTo(b.x - b.nx * inset, b.y - b.ny * inset);
+    }
+    ctx.closePath();
+  }
+
   function drawText(ctx, layer, tr) {
     var t = layer.text, lay = textLayout(layer);
     var ox = -layer.anchor.x * lay.w, oy = -layer.anchor.y * lay.h;
     if (t.bubble) {
+      var shape = t.bubbleShape || "round", tail = t.bubbleTail, tx = tail === "left" ? ox + lay.w * 0.22 : ox + lay.w * 0.78;
       ctx.fillStyle = t.bubbleColor;
-      var r = Math.min(lay.h / 2, t.size * 0.8);
-      roundRect(ctx, ox, oy, lay.w, lay.h, r);
-      ctx.save(); ctx.shadowColor = "rgba(0,0,0,.28)"; ctx.shadowBlur = Math.max(6, t.size * 0.35); ctx.shadowOffsetY = Math.max(2, t.size * 0.08); ctx.fill(); ctx.restore();
-      if (t.bubbleTail !== "none") {
-        var tw = Math.min(lay.w * 0.3, t.size * 0.9), tx = t.bubbleTail === "left" ? ox + lay.w * 0.22 : ox + lay.w * 0.78;
-        ctx.moveTo(tx - tw / 2, oy + lay.h - 1);
-        ctx.lineTo(t.bubbleTail === "left" ? tx - tw * 0.9 : tx + tw * 0.9, oy + lay.h + t.size * 0.7);
-        ctx.lineTo(tx + tw / 2, oy + lay.h - 1);
-        ctx.closePath();
+      if (shape === "thought") {   // düşünce balonu: bulut kenarı, konuşana doğru küçülen kabarcıklar
+        var tr0 = Math.max(10, t.size * 0.5), inset = tr0 * 0.6;
+        thoughtPath(ctx, ox + inset, oy + inset, lay.w - inset * 2, lay.h - inset * 2, tr0);
+        ctx.save(); ctx.shadowColor = "rgba(0,0,0,.22)"; ctx.shadowBlur = Math.max(6, t.size * 0.3); ctx.shadowOffsetY = Math.max(2, t.size * 0.06); ctx.fill(); ctx.restore();
+        if (tail !== "none") {
+          var dir = tail === "left" ? -1 : 1;
+          [[0, 0.5, 0.24], [0.4, 1.05, 0.14]].forEach(function (c) { ctx.beginPath(); ctx.arc(tx + dir * t.size * c[0], oy + lay.h + t.size * c[1], t.size * c[2], 0, Math.PI * 2); ctx.fill(); });
+        }
+      } else if (shape === "shout") {   // bağırma balonu: sivri dişli kenar, uzun sivri kuyruk, kalın çizgi
+        shoutPath(ctx, ox, oy, lay.w, lay.h, t.size, tail === "none" ? null : tx, t.size * 1.1);
+        ctx.save(); ctx.shadowColor = "rgba(0,0,0,.25)"; ctx.shadowBlur = Math.max(6, t.size * 0.3); ctx.shadowOffsetY = Math.max(2, t.size * 0.06); ctx.fill(); ctx.restore();
+        ctx.save(); ctx.lineWidth = Math.max(2, t.size * 0.07); ctx.strokeStyle = "#1b1f2a"; ctx.lineJoin = "miter"; ctx.stroke(); ctx.restore();
+      } else {
+        var r = Math.min(lay.h / 2, t.size * 0.8);
+        roundRect(ctx, ox, oy, lay.w, lay.h, r);
+        ctx.save(); ctx.shadowColor = "rgba(0,0,0,.28)"; ctx.shadowBlur = Math.max(6, t.size * 0.35); ctx.shadowOffsetY = Math.max(2, t.size * 0.08); ctx.fill(); ctx.restore();
+        if (tail !== "none") {
+          var tw = Math.min(lay.w * 0.3, t.size * 0.9);
+          ctx.moveTo(tx - tw / 2, oy + lay.h - 1);
+          ctx.lineTo(tail === "left" ? tx - tw * 0.9 : tx + tw * 0.9, oy + lay.h + t.size * 0.7);
+          ctx.lineTo(tx + tw / 2, oy + lay.h - 1);
+          ctx.closePath();
+        }
+        ctx.fill();
       }
-      ctx.fill();
     }
     ctx.font = fontString(t);
     ctx.textBaseline = "middle";
@@ -243,6 +288,7 @@
     ctx.translate(tr.x, tr.y);
     ctx.rotate(tr.rot * DEG);
     ctx.scale(tr.sx * (layer.flipX ? -1 : 1), tr.sy * (layer.flipY ? -1 : 1));
+    if (tr.blur > 0.25 && "filter" in ctx) ctx.filter = "blur(" + Math.min(40, tr.blur).toFixed(1) + "px)";   // alan derinliği: yakın çekimde uzak katmanlar bulanır
     var ox = -layer.anchor.x * size.w, oy = -layer.anchor.y * size.h;
     if (layer.type === "text") {
       drawText(ctx, layer, tr);

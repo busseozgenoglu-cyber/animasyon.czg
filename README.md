@@ -59,19 +59,25 @@ Ali ve Ayşe sağa çıkar.
   yoksa mekâna (park, orman, şehir, deniz, dağ, oda, uzay…) ve zamana göre çizilmiş bir arka plan üretilir (bulutlar akar).
 - **Replik:** `ALİ: metin` — balon karakterin başının üstünde çıkar, konuşurken karakter kıpırdar (konuşma karesi yüklediysen ağzı oynar).
   Parantez içi duygu: `(mutlu)`, `(üzgün)`, `(kızgın)`, `(şaşkın)`, `(korkmuş)`, `(fısıldayarak)`, `(düşünceli)`, `(yorgun)`.
+  **Balon şekilleri:** `AYŞE (içinden): Keşke...` → bulut kenarlı düşünce balonu (ağız kıpırdamaz); kızgın replik ya da `BÜYÜK HARFLE ÜNLEM!` → sivri dişli bağırma balonu.
 - **Eylem:** düz cümle — girer, çıkar, yürür, koşar, zıplar, döner, düşer, kalkar, uçar, iner, el sallar, güler, ağlar, kızar, şaşırır,
   korkar, dans eder, oturur, uyur, uyanır, düşünür, bakar/görür, sarılır, alkışlar, şarkı söyler, geri çekilir, kayar, yüzer, esner,
-  atar, yakalar, yatar, büyür, küçülür, saklanır, bekler. Yön: `sağdan/soldan`, `sağa/sola`;
+  atar, yakalar, yatar, büyür, küçülür, saklanır, bekler; `Kapı çalar.` ve `Telefon çalar.` → ses, **TAK TAK!** / **ZIRR ZIRR!** yazısı, sahnedekiler irkilip kapıya bakar. Yön: `sağdan/soldan`, `sağa/sola`;
   hedef: `Ali Ayşe'ye doğru yürür`, `Ali Ayşe'ye sarılır`; birlikte: `Ali ve Ayşe`, `Herkes`; süre: `2 saniye bekler`; hız: `koşarak`, `yavaşça`.
   Ünlemle biten replikte karakter hafifçe zıplar, soru işaretinde başını yana eğer; dinleyen karakter konuşana döner ve başını sallar.
 - **Arka plan:** her sahnede kilitli bir “Arka plan” katmanı olarak gelir ve yavaşça yaklaşır/uzaklaşır (kamera hissi); bulutlar akar.
 - **Anlatıcı:** `ANLATICI: metin` → alt yazı.
 - **Kamera:** `Kamera Ayşe'ye yaklaşır.` (yakın çekim), `Kamera uzaklaşır.` (genel plan), `Kamera sağa kayar.` (kaydırma), `Yakın çekim: Ali`.
   Kamera hareketi sıradaki replikle örtüşür; stüdyoda sahne özelliklerindeki **Kamera** bölümünden ve zaman çizelgesindeki kamera satırından elle de kurulur.
-- **Ses efektleri:** balon açılırken *pop*, giriş/çıkışta *vınn*, zıplamada *boing*, düşmede *güm*, alkış, başlıkta çan. Dosya gerekmez (tarayıcıda sentezlenir);
+- **Ses efektleri:** balon açılırken *pop*, giriş/çıkışta *vınn*, zıplamada *boing*, düşmede *güm*, alkış, başlıkta çan, kapı, telefon, gök gürültüsü. Dosya gerekmez (tarayıcıda sentezlenir);
   önizlemede çalar, WebM/MP4 dışa aktarımına müzikle birlikte karışır. Sihirbazın ayarlarından kapatılabilir.
-- **Hava durumu:** sahne başlığına `YAĞMURLU`, `KARLI`, `SİSLİ`, `RÜZGARLI` ekle (`SAHNE 2 - PARK - AKŞAM - YAĞMURLU`): yağmur ya da kar karakterlerin önünde akar,
+- **Ses yazıları (çizgi roman):** düşmede **GÜM!**, zıplamada **HOP!**, inişte **PAT!**, alkışta **ŞAK ŞAK!**, fırlatmada **FIŞŞ!**, gülmede **HA HA!**, şaşırmada **!**, kızınca **GRRR!** —
+  karakterin yanında patlayarak belirir, hafifçe yüzer, söner. Ayarlardan kapatılabilir.
+- **Alan derinliği:** kamera yakın çekime girince (duygusal an, `Kamera Ayşe'ye yaklaşır.`) uzak arka plan katmanları bulanır, karakter öne çıkar; zemin ve yağmur net kalır.
+- **Kamera sarsıntısı:** düşmede ve gök gürültüsünde kamera kısa bir an titrer ve hafifçe yaklaşır (vurgu); yakın çekim sırasında kamera sabit durur.
+- **Hava durumu:** sahne başlığına `YAĞMURLU`, `KARLI`, `SİSLİ`, `RÜZGARLI`, `FIRTINALI` ekle (`SAHNE 2 - PARK - AKŞAM - YAĞMURLU`): yağmur ya da kar karakterlerin önünde akar,
   gökyüzü kapanır ve ton soğur; siste beyaz tüller süzülür; rüzgârda ağaçlar sallanır, bulutlar hızlanır, yapraklar uçuşur.
+  **Fırtınada** gök kararır, sağanak hızlanır, ağaçlar sert sallanır, şimşek tüm kareyi çakar, ardından gök gürler ve kamera sarsılır (iç mekânda şimşek camdan, yağmur kısık duyulur).
 - **Derinlikli arka plan:** çizilen mekânlar beş katmandır (gökyüzü, uzak, orta, ağaçlar, zemin) ve kamera hareketinde farklı hızda kayar;
   parkta bank ve çiçekler, ormanda katmanlı çamlar ve mantarlar, şehirde sokak lambaları ve uzak silüet, denizde yelkenli ve kayalar, dağda karlı zirveler, odada kitaplık, okulda kara tahta ve duvar saati. Yağmur, kar ve sis karakterlerin önünde, replik balonlarının altında kalır.
 - **Ortam sesi:** her sahne kendi sesini taşır (yağmur, rüzgâr, gündüz kuşlar, gece cırcır böcekleri, dalga, şehir uğultusu, uzay uğultusu; iç mekânda yağmur camdan kısık duyulur); dosya gerekmez, sentezlenir.

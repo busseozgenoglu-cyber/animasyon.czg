@@ -30,7 +30,10 @@
     chime: function (c, d, at, n) { tone(c, d, at, "sine", 880, 880, 0.9, 0.16, n); tone(c, d, at + 0.12, "sine", 1318, 1318, 0.9, 0.12, n); tone(c, d, at + 0.24, "sine", 1760, 1760, 1.0, 0.08, n); },
     clap: function (c, d, at, n) { for (var i = 0; i < 3; i++) burst(c, d, at + i * 0.13, 0.04, 0.3, "highpass", 1400, 0, n); },
     step: function (c, d, at, n) { burst(c, d, at, 0.05, 0.16, "lowpass", 700, 250, n); tone(c, d, at, "sine", 110, 70, 0.07, 0.12, n); },
-    sparkle: function (c, d, at, n) { for (var i = 0; i < 4; i++) tone(c, d, at + i * 0.07, "sine", 1200 + i * 300, 1600 + i * 300, 0.18, 0.08, n); }
+    sparkle: function (c, d, at, n) { for (var i = 0; i < 4; i++) tone(c, d, at + i * 0.07, "sine", 1200 + i * 300, 1600 + i * 300, 0.18, 0.08, n); },
+    thunder: function (c, d, at, n) { burst(c, d, at, 1.4, 0.55, "lowpass", 190, 50, n); burst(c, d, at + 0.35, 1.9, 0.35, "lowpass", 130, 40, n); tone(c, d, at, "sine", 64, 28, 1.6, 0.35, n); },   // çakmadan sonra yuvarlanan gürleme
+    knock: function (c, d, at, n) { [0, 0.24, 0.42].forEach(function (o) { burst(c, d, at + o, 0.05, 0.4, "lowpass", 800, 250, n); tone(c, d, at + o, "sine", 170, 80, 0.09, 0.28, n); }); },   // tak tak tak
+    ring: function (c, d, at, n) { for (var r = 0; r < 2; r++) for (var i = 0; i < 10; i++) tone(c, d, at + r * 0.95 + i * 0.05, "triangle", i % 2 ? 1320 : 1100, i % 2 ? 1320 : 1100, 0.045, 0.09, n); }   // zırr zırr
   };
 
   /* ── Ortam sesleri: döngülü gürültü + filtre + yavaş dalgalanma; kuş ve cırcır böceği kısa tonlardan ── */
