@@ -273,6 +273,33 @@ async function png(page, name, w, h, drawSrc) {
     check(!!st5 && st5.flash && st5.flashBelowCaption && st5.thunder >= 1 && st5.amb === "rain@undefined,wind@0.7" && st5.rain === 2 && st5.grade === "#6b7aa8" && st5.shakeKeys >= 8, "fırtınalı gece: şimşek çakması (alt yazıların altında), gök gürültüsü, yağmur + rüzgâr sesi, koyu ton, kamera sarsıntısı (" + JSON.stringify(st5) + ")");
     check(!!st5 && st5.knock === 1 && st5.taktak === 1 && st5.gum === 1 && st5.shout === "shout" && st5.thought === "thought" && !st5.thoughtTalk && st5.warn === 0, "kapı çalınca TAK TAK! yazısı ve sesi; düşünce balonu (içinden, ağız kıpırdamaz), bağırma balonu (kızgın), düşünce GÜM! yazısı");
     check(fx.extra.dof.far >= 3 && fx.extra.dof.ground === 0, "alan derinliği: duygusal yakın çekimde uzak arka plan bulanır (" + fx.extra.dof.far + " px), zemin net kalır");
+    // Yürüyüş: tek görselli karakter adım kareleri üretir; giriş/çıkış sabit hızlı; adım sıklığı hızla uyumlu
+    const walk = await page.evaluate(async () => {
+      const keep = App.ensureScript().text, keepCast = App.ensureScript().cast.slice();
+      const c = document.createElement("canvas"); c.width = 200; c.height = 320; const x = c.getContext("2d");
+      x.fillStyle = "#f4c7a1"; x.beginPath(); x.arc(100, 50, 44, 0, 7); x.fill(); x.fillStyle = "#ff6b6b"; x.fillRect(58, 96, 84, 100);
+      x.fillStyle = "#3a5fcd"; x.fillRect(62, 196, 32, 100); x.fillRect(106, 196, 32, 100); x.fillStyle = "#222"; x.fillRect(54, 294, 46, 24); x.fillRect(100, 294, 46, 24);
+      const a = { id: "as_e2e_zeynep", name: "zeynep.png", dataUrl: c.toDataURL("image/png"), width: 200, height: 320 };
+      App.S.project.assets[a.id] = a; await Render.ensureAssets(App.S.project);
+      const m = App.addCastMember("Zeynep"); m.images.push({ assetId: a.id, role: "pose" });
+      App.ensureScript().text = "SAHNE 1 - PARK - GÜNDÜZ\nZeynep sağdan girer.\nAli soldan girer.\nZeynep sola yürür.\nAli sağa koşar.\nZeynep sola çıkar.";
+      await App.buildFromScript({ autoplay: false });
+      const p = App.S.project, s = p.scenes.find((q) => /PARK/.test(q.name)), z = s.layers.find((l) => l.name === "Zeynep"), ali = s.layers.find((l) => l.name === "Ali");
+      const gen = Object.values(p.assets).filter((q) => (q.genKey || "").indexOf("walkgen:" + a.id + ":") === 0);
+      const zIn = z.effects.find((e) => e.type === "slideIn"), zOut = z.effects.find((e) => e.type === "slideOut"), zWob = z.effects.filter((e) => e.type === "wobble");
+      const zSets = z.frameSets.filter((f) => f.frames.length === 4);
+      const steps = s.sfx.filter((q) => q.type === "step").map((q) => q.t).sort((p1, p2) => p1 - p2);
+      const gaps = steps.slice(1).map((t, i) => +(t - steps[i]).toFixed(2)).filter((g) => g > 0.05);
+      const aliRun = ali.effects.filter((e) => e.type === "wobble").sort((e1, e2) => e2.params.bob - e1.params.bob)[0];
+      const out = { gen: gen.length, genSize: gen.map((q) => q.width + "x" + q.height).join(), zSize: p.assets[z.frames[0]].width + "x" + p.assets[z.frames[0]].height, sets: zSets.length, fps: zSets.map((f) => +f.fps.toFixed(1)).join(), inEase: zIn && zIn.params.easing, outEase: zOut && zOut.params.easing,
+        inDur: zIn ? +(zIn.end - zIn.start).toFixed(2) : 0, wobSpeed: zWob.map((e) => +e.params.speed.toFixed(2)).join(), xEase: z.tracks.x.map((k2) => k2.e).join(), minGap: Math.min.apply(null, gaps), maxGap: Math.max.apply(null, gaps), runBob: aliRun ? aliRun.params.bob : 0, warn: Easy.warnings.length };
+      App.ensureScript().cast = keepCast; App.ensureScript().text = keep; delete p.assets[a.id];
+      await App.buildFromScript({ autoplay: false });
+      return out;
+    });
+    check(walk.gen === 2 && walk.genSize === "200x320,200x320" && walk.sets === 3 && walk.fps.split(",").every((f) => +f >= 4 && +f <= 9), "tek görselli karakter: 2 adım karesi üretildi (boyut korunur), giriş/yürüme/çıkışta 4 karelik döngü (" + JSON.stringify({ gen: walk.gen, genSize: walk.genSize, zSize: walk.zSize, sets: walk.sets, fps: walk.fps }) + ")");
+    check(walk.inEase === "linear" && walk.outEase === "linear" && walk.xEase.indexOf("ease") < 0 && walk.inDur >= 0.8 && walk.inDur <= 2 && walk.wobSpeed.split(",").every((v) => +v >= 0.6 && +v <= 2.3), "giriş ve çıkış sabit hızla yürüyerek (süzülmez); hoplama adım sıklığında, yalpa iki adımda bir (" + walk.wobSpeed + ")");
+    check(walk.minGap >= 0.2 && walk.maxGap <= 0.85 && walk.runBob > 0 && walk.warn === 0, "adım sesleri adım aralığında (" + walk.minGap + "–" + walk.maxGap + " sn); koşuda daha yüksek hoplama");
     check(fx.extra.fog === 2 && fx.extra.fogFront && fx.extra.fogBelowBubbles && fx.extra.angry, "sisli sahnede 2 sis tülü karakterlerin önünde, balonların altında; kızgın replik balonu titriyor ve pembeleşiyor");
     check(!!fx.extra.okul && fx.extra.okul.bg === 4 && fx.extra.okul.amb === "rain@0.35" && fx.extra.okul.whisper === "#f4f4f4" && fx.extra.okul.warn === 0, "sınıf iç mekânı: 4 katman, camdan kısık yağmur sesi, “fısıltı” balonu tanındı (" + JSON.stringify(fx.extra.okul) + ")");
     check(film.title === "Kayıp Top", "film adı senaryodaki BAŞLIK'tan alındı: " + film.title);

@@ -86,7 +86,9 @@ Ali ve Ayşe sağa çıkar.
 - **Hayvanlar:** `Karabaş havlar.`, `Pamuk miyavlar.`, `Cik cıvıldar.`, `Karabaş kuyruk sallar.` → ses balonu ve hareket.
 - **Kalabalık:** 4+ karakterde boylar kendiliğinden küçülür, sığmayınca arka sıra açılır (arka sıra daha küçük ve yukarıda, önü kapatmaz).
 - **Canlandırma ayrıntıları:** konuşurken ağız gerçek sese (seslendirme klibinin zarfı) ya da metnin hece ritmine göre açılıp kapanır; cümle başlarında el-kol jestleri yapılır,
-  dinleyen karakter konuşana bakar (göz yönü); yürüyüş 4 karelik temas–geçiş döngüsüyle ve adım sesleriyle; zıplamadan önce çömelme (hazırlık);
+  dinleyen karakter konuşana bakar (göz yönü); yürüyüş 4 karelik temas–geçiş döngüsüyle ve adım sesleriyle (her adımda bir hoplama, iki adımda bir yalpa; adım sesi ayak yere değince);
+  **tek görselli karakterlerde adım kareleri kendiliğinden üretilir** (bacak kalçadan içe makaslanır, ayak kalkar); yürüme hızı karakter boyuna bağlıdır (yürüme 1,15 boy/sn, koşma 2,4 boy/sn),
+  süre yola göre hesaplanır ve adım sıklığı hıza uyar (ayak yerde kaymaz); giriş ve çıkış sabit hızla yürüyerek olur, süzülmez; zıplamadan önce çömelme (hazırlık);
   sahneler arası sırayla silme ve siyaha geçiş, son sahnede iris kapanışı; gece mavisi / akşam turuncusu / sabah sıcaklığı renk tonu;
   kamera hareketinde arka plan ve bulutlar daha az kayar (paralaks derinliği) ve kamera konuşana doğru fark edilmeden kayar;
   kızgın, şaşkın, korkmuş, üzgün ve fısıltılı repliklerde kamera konuşana yakın çekim yapar; soru ve ünlemden sonra kısa bir tepki beklemesi vardır;

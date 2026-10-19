@@ -662,6 +662,34 @@
       }
       cast[norm(nm)] = made;
     });
+    /* Yürüme karesi olmayan (tek görselli) karakterler: bacak bölgesi (alt %44) kalçadan içe makaslanıp hafif kaldırılır → gerçek adım hissi.
+       İki kare: sol bacak adım atar / sağ bacak adım atar; aralarda duruş karesi (ayaklar yerde). */
+    function isCutout(e) {   // kenarlarında saydam piksel var mı (kesilmiş PNG)? Opak fotoğraflarda makas yapılmaz
+      try {
+        var c = canvas(e.w, e.h), x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(e.img, 0, 0);
+        var d = x.getImageData(0, 0, e.w, e.h).data, n = 0, tr = 0;
+        for (var i = 0; i < e.w; i += 2) { n += 2; if (d[((e.h - 1) * e.w + i) * 4 + 3] < 20) tr++; if (d[i * 4 + 3] < 20) tr++; }
+        for (var j = 0; j < e.h; j += 2) { n += 2; if (d[(j * e.w) * 4 + 3] < 20) tr++; if (d[(j * e.w + e.w - 1) * 4 + 3] < 20) tr++; }
+        return tr / n >= 0.35;
+      } catch (err) { return false; }
+    }
+    function genWalkFrames(def) {
+      var e = R.getEntry(def.pose), a = project.assets[def.pose];
+      if (!e || !a || e.w < 8 || e.h < 8 || e.w * e.h > 4200 * 4200 || !isCutout(e)) return;
+      var w = e.w, h = e.h, hip = Math.round(h * 0.56), cx = Math.round(w / 2), legH = h - hip, lift = Math.max(2, Math.round(h * 0.025));
+      def.walk = [0, 1].map(function (i) {
+        return genAsset("walkgen:" + def.pose + ":" + i, String(a.name || def.name).replace(/\.[a-z0-9]+$/i, "") + " (adım " + (i + 1) + ").png", function () {
+          var c = canvas(w, h), x = c.getContext("2d");
+          x.drawImage(e.img, 0, 0, w, hip, 0, 0, w, hip);   // gövde olduğu gibi
+          var mv = i === 0 ? [0, cx] : [cx, w - cx], st = i === 0 ? [cx, w - cx] : [0, cx], sh = i === 0 ? 0.16 : -0.16;
+          x.drawImage(e.img, st[0], hip, st[1], legH, st[0], hip, st[1], legH);   // yerde duran bacak
+          x.save(); x.transform(1, 0, sh, 1, -hip * sh, -lift); x.drawImage(e.img, mv[0], hip, mv[1], legH, mv[0], hip, mv[1], legH); x.restore();   // adım atan bacak: kalçadan içe makas + ayak kalkar
+          return c;
+        });
+      });
+      def.walkGen = true;
+    }
+    Object.keys(cast).forEach(function (kk) { var d = cast[kk]; if (!d.walk.length && !d.placeholder) genWalkFrames(d); });
     var names = Object.keys(cast).map(function (kk) { return cast[kk].name; });
 
     var bgList = (script.backgrounds || []).filter(function (b) { return project.assets[b.assetId]; });
@@ -906,15 +934,23 @@
           pr.holder = null; pr.landed = at + 0.45;
         });
       }
-      function moveTo(kn, nx, t0, dur, mode) {
+      /* Yürüyüş ölçüleri: hız karakter boyuna bağlı (yürüme 1,15 boy/sn, koşma 2,4 boy/sn); süre verilmişse adım sıklığı ona uyar → ayak yerde kaymaz */
+      function gait(kn, dist, fast, seconds) {
+        var ch = Math.max(40, chars[kn].charH), speed = ch * (fast ? 2.4 : 1.15), stride = ch * (fast ? 0.67 : 0.44);
+        var dur = seconds || Math.max(0.45, Math.min(3.2, dist / speed));
+        var steps = Math.max(1.2, Math.min(4.5, (dist / dur) / stride));
+        return { dur: Math.round(dur * 100) / 100, steps: Math.round(steps * 100) / 100 };
+      }
+      function moveTo(kn, nx, t0, dur, mode, seconds) {   // süre verilmemişse yola göre hesaplanır; kullanılan süre döner (0: hareket yok)
         var c = chars[kn], L = c.layer;
         nx = Math.max(W * 0.06, Math.min(W * 0.94, Math.round(freeSpot(kn, nx, t0))));
         dropHeld(kn, t0);
         var from = curX(kn, t0);
-        if (Math.abs(nx - from) < 2) return;
+        if (Math.abs(nx - from) < 2) return 0;
+        var g = gait(kn, Math.abs(nx - from), mode === "run", seconds); dur = g.dur;
         setFacing(kn, nx > from ? 1 : -1, t0);
-        key(L, "x", t0, from, "linear"); key(L, "x", t0 + dur, nx, mode === "run" ? "easeInOutQuad" : "linear");
-        walkCycle(kn, t0, t0 + dur, mode === "run" ? 3.2 : 2.2, nx > from ? 1 : -1);
+        key(L, "x", t0, from, "linear"); key(L, "x", t0 + dur, nx, "linear");   // sabit hız: adımlar yere oturur
+        walkCycle(kn, t0, t0 + dur, g.steps, nx > from ? 1 : -1);
         if (mode === "run") {
           puff(from, c.ground, t0, 0.7);
           var dirR = nx > from ? 1 : -1, sid = genAsset("speed", "hiz.png", drawSpeedLines), ss = 0.5 * k * (c.charH / (0.42 * base));
@@ -923,14 +959,17 @@
           fx(SL2, "fadeIn", t0 + 0.1, t0 + 0.25); fx(SL2, "fadeOut", t0 + dur - 0.2, t0 + dur);
         }
         c.x = nx;
+        return dur;
       }
       function walkCycle(kn, a, b, stepsPerSec, dirSign) {
-        var c = chars[kn], L = c.layer;
-        fx(L, "wobble", a, b, { strength: 4, speed: stepsPerSec, bob: Math.round(8 * k) });
-        fx(L, "lean", a, b, { angle: (dirSign || c.facing || 1) * (stepsPerSec > 3 ? 7 : 3), ramp: 0.25 });   // hareket yönüne öne eğilir
-        if (c.def.walk.length >= 2) L.frameSets.push({ start: a, end: b, frames: [c.def.walk[0], c.def.pose, c.def.walk[1], c.def.pose].concat(c.def.walk.slice(2)), fps: stepsPerSec * 2 });   // temas–geçiş–temas–geçiş
-        else if (c.def.walk.length) L.frameSets.push({ start: a, end: b, frames: [c.def.pose, c.def.walk[0]], fps: stepsPerSec * 2 });
-        if (!c.flying) { var nStep = 0; for (var ts = a + 0.5 / stepsPerSec; ts < b && nStep < 16; ts += 1 / stepsPerSec, nStep++) cue("step", ts); }
+        var c = chars[kn], L = c.layer, run = stepsPerSec > 3;
+        fx(L, "wobble", a, b, { strength: run ? 5 : 3.5, speed: stepsPerSec / 2, bob: Math.round(c.charH * (run ? 0.05 : 0.028)) });   // her adımda bir hoplama (ayak yere değince dipte), iki adımda bir yalpa
+        fx(L, "lean", a, b, { angle: (dirSign || c.facing || 1) * (run ? 8 : 3), ramp: 0.25 });   // hareket yönüne öne eğilir
+        var fs0 = Math.max(0, a - 0.25 / stepsPerSec), fps = stepsPerSec * 2;   // kareler çeyrek adım erken başlar: temas karesi hoplamanın dibine, geçiş karesi tepesine denk gelir
+        if (c.def.walkGen) L.frameSets.push({ start: fs0, end: b, frames: [c.def.pose, c.def.walk[0], c.def.pose, c.def.walk[1]], fps: fps });   // ayaklar yerde – sol adım – ayaklar yerde – sağ adım
+        else if (c.def.walk.length >= 2) L.frameSets.push({ start: fs0, end: b, frames: [c.def.walk[0], c.def.pose, c.def.walk[1], c.def.pose].concat(c.def.walk.slice(2)), fps: fps });   // temas–geçiş–temas–geçiş
+        else if (c.def.walk.length) L.frameSets.push({ start: fs0, end: b, frames: [c.def.walk[0], c.def.pose], fps: fps });
+        if (!c.flying) { var nStep = 0; for (var ts = a + 1 / stepsPerSec; ts < b + 0.02 && nStep < 16; ts += 1 / stepsPerSec, nStep++) cue("step", ts); }   // adım sesi ayak yere değince
         c.busy.push([a, b]);
       }
       /* Çizgi roman ses yazısı: GÜM!, HOP!, TAK TAK! — patlayarak belirir, hafifçe yüzer, söner */
@@ -1173,17 +1212,19 @@
             group = { dir: gdir, dist: common };
           }
         }
-        subs.forEach(function (kn) {
+        subs.forEach(function (kn, si) {
           var c = chars[kn], L;
           switch (a.act) {
             case "enter": {
               L = charLayer(kn);
               var dir = a.dir || (c.slotX < W / 2 ? "left" : "right");
+              var entDist = dir === "left" ? c.slotX + charW(kn) / 2 + 24 : dir === "right" ? (W - c.slotX) + charW(kn) / 2 + 24 : H * 0.6;
+              var ge = gait(kn, entDist, a.speed === "fast", a.seconds); dur = si ? Math.max(dur, ge.dur) : ge.dur;   // süre yola göre: sabit hızla yürüyerek girer, süzülmez
               c.present = true; L.inPoint = start;
-              fx(L, "slideIn", start, start + dur, { dir: dir, easing: a.speed === "fast" ? "easeOutQuad" : "easeOutCubic" });
-              walkCycle(kn, start, start + dur, a.speed === "fast" ? 3.2 : 2.2, dir === "left" ? 1 : dir === "right" ? -1 : 0);
+              fx(L, "slideIn", start, start + dur, { dir: dir, easing: "linear" });
+              walkCycle(kn, start, start + dur, ge.steps, dir === "left" ? 1 : dir === "right" ? -1 : 0);
               fx(L, "bounce", start + dur - 0.05, start + dur + 0.35, { strength: Math.round(base * 0.012), speed: 2.5, squash: 10 });   // varışta yerine oturma
-              if (kn === subs[0]) cue("whoosh", start);
+              if (kn === subs[0] && a.speed === "fast") cue("whoosh", start);
               if (dir === "left" || dir === "right") { setFacing(kn, dir === "left" ? 1 : -1, start, !L.tracks.sx.length); setFacing(kn, c.x <= W / 2 ? 1 : -1, start + dur); }
               fx(L, "breathe", start + dur, null, { strength: 2, speed: 0.35 });
               break;
@@ -1193,14 +1234,16 @@
               if (a.act === "hide") { fx(L, "fadeOut", start, start + dur); }
               else {
                 var dir2 = group ? group.dir : (a.dir || (curX(kn, start) < W / 2 ? "left" : "right"));
+                var exDist = group ? group.dist : dir2 === "left" ? curX(kn, start) + charW(kn) / 2 + 24 : dir2 === "right" ? (W - curX(kn, start)) + charW(kn) / 2 + 24 : H * 0.6;
+                var gx = gait(group ? subs[0] : kn, exDist, a.speed === "fast", a.seconds); dur = si ? Math.max(dur, gx.dur) : gx.dur;   // süre yola göre; grup aynı hızda
                 if (group) {
                   // Birlikte çıkanlar aynı hızda yürür: ortak mesafe, kimse kimseyi yakalamaz
                   var x0 = curX(kn, start);
-                  key(L, "x", start, x0, a.speed === "fast" ? "easeInQuad" : "linear");
+                  key(L, "x", start, x0, "linear");
                   key(L, "x", start + dur, x0 + (group.dir === "left" ? -group.dist : group.dist), "linear");
-                } else fx(L, "slideOut", start, start + dur, { dir: dir2, easing: a.speed === "fast" ? "easeInQuad" : "easeInCubic" });
-                walkCycle(kn, start, start + dur, a.speed === "fast" ? 3.2 : 2.2, dir2 === "left" ? -1 : dir2 === "right" ? 1 : 0);
-                if (kn === subs[0]) cue("whoosh", start + dur * 0.3);
+                } else fx(L, "slideOut", start, start + dur, { dir: dir2, easing: "linear" });
+                walkCycle(kn, start, start + dur, gx.steps, dir2 === "left" ? -1 : dir2 === "right" ? 1 : 0);
+                if (kn === subs[0] && a.speed === "fast") cue("whoosh", start + dur * 0.3);
                 if (dir2 === "left" || dir2 === "right") setFacing(kn, dir2 === "left" ? -1 : 1, start);
               }
               L.outPoint = start + dur; c.present = false; c.layer = null; c.x = c.slotX;   // yeniden girerse yeni katman
@@ -1209,15 +1252,17 @@
             case "walk": case "run": {
               ensurePresent(kn, start);
               var step = (a.act === "run" ? 0.34 : 0.24) * W, dx = a.to === "left" ? -step : a.to === "right" ? step : (c.facing >= 0 ? step : -step);
-              if (a.to === "top" || a.to === "bottom") { key(c.layer, "y", start, M.trackValue(c.layer.tracks.y, start, c.ground)); key(c.layer, "y", start + dur, c.ground + (a.to === "top" ? -H * 0.12 : H * 0.04)); walkCycle(kn, start, start + dur, 2.2); }
-              else moveTo(kn, curX(kn, start) + dx, start, dur, a.act);
+              if (a.to === "top" || a.to === "bottom") { var gv = gait(kn, H * (a.to === "top" ? 0.36 : 0.12), a.act === "run", a.seconds); dur = si ? Math.max(dur, gv.dur) : gv.dur; key(c.layer, "y", start, M.trackValue(c.layer.tracks.y, start, c.ground), "linear"); key(c.layer, "y", start + dur, c.ground + (a.to === "top" ? -H * 0.12 : H * 0.04), "linear"); walkCycle(kn, start, start + dur, gv.steps); }
+              else { var usedW = moveTo(kn, curX(kn, start) + dx, start, dur, a.act, a.seconds); if (usedW) dur = si ? Math.max(dur, usedW) : usedW; }
               break;
             }
             case "walk_to": {
               ensurePresent(kn, start);
               var tk = a.target ? norm(a.target) : null;
-              if (tk && chars[tk] && chars[tk].present) { var tx = curX(tk, start), side = curX(kn, start) < tx ? -1 : 1; moveTo(kn, tx + side * besideDist(kn, tk, 1.05), start, dur, a.speed === "fast" ? "run" : "walk"); }
-              else moveTo(kn, curX(kn, start) + (c.facing >= 0 ? 1 : -1) * W * 0.2, start, dur, "walk");
+              var usedT = 0;
+              if (tk && chars[tk] && chars[tk].present) { var tx = curX(tk, start), side = curX(kn, start) < tx ? -1 : 1; usedT = moveTo(kn, tx + side * besideDist(kn, tk, 1.05), start, dur, a.speed === "fast" ? "run" : "walk", a.seconds); }
+              else usedT = moveTo(kn, curX(kn, start) + (c.facing >= 0 ? 1 : -1) * W * 0.2, start, dur, "walk", a.seconds);
+              if (usedT) dur = si ? Math.max(dur, usedT) : usedT;
               break;
             }
             case "jump": {
@@ -1272,7 +1317,7 @@
               var hk = a.target ? norm(a.target) : null;
               if (hk && chars[hk] && chars[hk].present) {
                 var hx = curX(hk, start), hside = curX(kn, start) < hx ? -1 : 1;
-                moveTo(kn, hx + hside * besideDist(kn, hk, 0.62), start, Math.max(0.5, dur - 0.6), "walk");
+                moveTo(kn, hx + hside * besideDist(kn, hk, 0.62), start, Math.max(0.5, dur - 0.6), "walk", Math.max(0.5, dur - 0.6));
                 fx(c.layer, "lean", start + dur - 0.6, start + dur + 1.2, { angle: hside < 0 ? 8 : -8, ramp: 0.3 });
                 fx(chars[hk].layer, "lean", start + dur - 0.4, start + dur + 1.2, { angle: hside < 0 ? -6 : 6, ramp: 0.3 });
                 var hid = genAsset("heart", "kalp.png", function () { return drawHeart(345); }), hcx = (hx + curX(kn, start + dur)) / 2, hcy = c.ground - c.charH * 0.95;
@@ -1284,13 +1329,13 @@
               } else fx(c.layer, "lean", start, start + dur, { angle: 6, ramp: 0.3 });
               break;
             }
-            case "back": ensurePresent(kn, start); moveTo(kn, curX(kn, start) - (c.facing >= 0 ? 1 : -1) * W * 0.1, start, dur, "walk"); setFacing(kn, c.facing >= 0 ? 1 : -1, start + dur); break;
+            case "back": { ensurePresent(kn, start); var usedB = moveTo(kn, curX(kn, start) - (c.facing >= 0 ? 1 : -1) * W * 0.1, start, dur, "walk", a.seconds); if (usedB) dur = si ? Math.max(dur, usedB) : usedB; setFacing(kn, c.facing >= 0 ? 1 : -1, start + dur); break; }
             case "clap": ensurePresent(kn, start); fx(c.layer, "pulse", start, start + dur, { strength: 10, speed: 3 }); if (kn === subs[0]) { cue("clap", start + 0.1); sfxText("ŞAK ŞAK!", curX(kn, start) + (c.facing >= 0 ? 1 : -1) * c.charH * 0.5, c.ground - c.charH * 0.8, start + 0.1, 48, 0.8); } break;
             case "bark": { ensurePresent(kn, start); var nb = norm(it.text), say = /miyav/.test(nb) ? "Miyav!" : /civil|cik cik/.test(nb) ? "Cik cik!" : /kukre|bogur/.test(nb) ? "Grrr!" : "Hav hav!";
               fx(c.layer, "talk", start, start + dur, { strength: Math.round(5 * k), speed: 5 }); fx(c.layer, "bounce", start, start + Math.min(dur, 0.8), { strength: Math.round(base * 0.015), speed: 2.5, squash: 12 }); thought(kn, say, start, start + dur + 0.4); if (kn === subs[0]) cue("pop", start); break; }
             case "sing": { ensurePresent(kn, start); fx(c.layer, "talk", start, start + dur, { strength: Math.round(5 * k), speed: 3 }); fx(c.layer, "float", start, start + dur, { strength: Math.round(6 * k), speed: 0.8, tilt: 4 }); thought(kn, "♪ ♫", start, start + dur); break; }
             case "slide": { ensurePresent(kn, start); var sdx = (a.to === "left" ? -1 : a.to === "right" ? 1 : (c.facing >= 0 ? 1 : -1)) * W * 0.3; var sfrom = curX(kn, start), sto = Math.max(W * 0.06, Math.min(W * 0.94, sfrom + sdx)); setFacing(kn, sto > sfrom ? 1 : -1, start); key(c.layer, "x", start, sfrom, "easeOutCubic"); key(c.layer, "x", start + dur, sto, "easeOutCubic"); fx(c.layer, "lean", start, start + dur, { angle: sto > sfrom ? -10 : 10, ramp: 0.2 }); c.x = sto; break; }
-            case "swim": { ensurePresent(kn, start); fx(c.layer, "float", start, start + dur, { strength: Math.round(8 * k), speed: 1.2, tilt: 6 }); moveTo(kn, curX(kn, start) + (a.to === "left" ? -1 : 1) * W * 0.2, start, dur, "walk"); break; }
+            case "swim": { ensurePresent(kn, start); fx(c.layer, "float", start, start + dur, { strength: Math.round(8 * k), speed: 1.2, tilt: 6 }); moveTo(kn, curX(kn, start) + (a.to === "left" ? -1 : 1) * W * 0.2, start, dur, "walk", dur); break; }
             case "yawn": ensurePresent(kn, start); fx(c.layer, "lean", start, start + dur, { angle: -6, ramp: 0.5 }); fx(c.layer, "breathe", start, start + dur, { strength: 6, speed: 1 / dur }); break;
             case "throw": {
               ensurePresent(kn, start); fx(c.layer, "swing", start, start + dur, { strength: 12, speed: 1 / dur }); fx(c.layer, "lean", start, start + dur, { angle: c.facing >= 0 ? 8 : -8, ramp: 0.2 });
